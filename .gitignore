@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Personal data - never commit
+resumes/*
+!resumes/resumes.example.yaml
+profile.yaml
+config/settings.yaml
+data/
+browser_profile/

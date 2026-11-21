@@ -1,0 +1,17 @@
+title: Backend Engineer
+company: Quillstack
+location: Remote (Global)
+description: |
+  Quillstack is a remote-first startup building APIs for document processing.
+
+  We're looking for a Backend Engineer with:
+  - 1-3 years of professional backend experience
+  - Strong Go or Python (FastAPI) skills
+  - PostgreSQL, Redis, message queues
+  - Docker and Kubernetes deployment experience on AWS
+  - Good written English for async remote collaboration
+
+  Nice to have: Java experience, Terraform, CI/CD with GitHub Actions.
+expected:
+  decision: apply
+  resume_id: software_dev

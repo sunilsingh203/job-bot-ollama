@@ -1,0 +1,41 @@
+# One company per line. Matching ignores case and suffixes like "Pvt Ltd", "Inc", "India".
+# Jobs from these companies use the MNC resume variant when one exists.
+Accenture
+Amazon
+Capgemini
+Cognizant
+Deloitte
+EPAM
+EY
+Google
+HCL
+HCLTech
+IBM
+Infosys
+KPMG
+LTIMindtree
+Microsoft
+Oracle
+PwC
+SAP
+Tata Consultancy Services
+TCS
+Tech Mahindra
+Wipro
+Persistent Systems
+Mphasis
+Hexaware
+Coforge
+Zensar
+Virtusa
+Cisco
+Adobe
+Salesforce
+JPMorgan Chase
+Goldman Sachs
+Morgan Stanley
+Walmart
+Flipkart
+Paytm
+Zoho
+Freshworks

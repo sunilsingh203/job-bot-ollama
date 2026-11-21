@@ -1,0 +1,10 @@
+# Copy to profile.yaml (gitignored) and fill in. Used for filtering now and form answers later.
+name: Your Name
+total_experience_years: 1.0      # professional + internship, as a decimal
+current_location: City, India
+preferred_locations: [Bengaluru, Hyderabad, Pune, Remote]
+open_to_remote: true
+open_to_relocate: true
+notice_period_days: 30
+current_ctc_lpa: null
+expected_ctc_lpa: null

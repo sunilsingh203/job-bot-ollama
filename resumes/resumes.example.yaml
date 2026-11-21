@@ -1,0 +1,19 @@
+# Copy to resumes/resumes.yaml and list your resume files (PDF, DOCX or TXT in this folder).
+# Adding a resume never needs a code change: just add an entry here and run `jobbot resumes index`.
+
+# Role tracks the LLM can pick from. The descriptions are shown to the model.
+role_tracks:
+  sde: General software engineer roles - SDE, software developer, backend, graduate/associate engineer.
+  java: Java / Spring Boot backend developer roles.
+  devops: Cloud, DevOps, SRE, platform and infrastructure roles.
+
+resumes:
+  - id: sde_startup              # lowercase letters, digits, _ or -
+    file: sde_startup.pdf
+    roles: [sde]                 # one resume can serve several tracks
+    company_type: startup        # startup | mnc | any
+    notes: ""                    # optional hint shown to the LLM
+  - id: sde_mnc
+    file: sde_mnc.pdf
+    roles: [sde]
+    company_type: mnc

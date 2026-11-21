@@ -1,0 +1,13 @@
+title: Site Reliability Engineer
+company: FinGrid Payments
+location: Hyderabad, Telangana
+description: |
+  FinGrid is looking for an SRE to own the reliability of our payments platform.
+
+  Requirements:
+  - 6+ years of experience in SRE / DevOps roles running production systems at scale
+  - Deep expertise with Kubernetes, Terraform and AWS
+  - Experience designing observability stacks (Prometheus, Grafana, OpenTelemetry)
+  - On-call leadership and incident management experience
+expected:
+  decision: skip

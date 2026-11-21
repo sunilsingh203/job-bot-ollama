@@ -1,0 +1,19 @@
+title: Cloud Engineer - AWS
+company: Infosys Limited
+location: Chandigarh
+description: |
+  Infosys is hiring Cloud Engineers for its cloud infrastructure services unit.
+
+  Role:
+  - Provision and manage AWS resources (EC2, VPC, IAM, S3) for enterprise clients
+  - Write Infrastructure as Code using Terraform or CloudFormation
+  - Support CI/CD pipelines in Azure DevOps / Jenkins
+  - Perform cost optimisation and security hardening of cloud accounts
+
+  Required:
+  - 1+ years of experience with AWS (internship experience acceptable)
+  - Knowledge of Linux, networking basics and scripting (Python/Shell)
+  - AWS certification preferred
+expected:
+  decision: apply
+  resume_id: devops_cloud

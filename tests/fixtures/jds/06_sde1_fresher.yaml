@@ -1,0 +1,20 @@
+title: Software Engineer I
+company: Brightwave
+location: Remote (India)
+description: |
+  Brightwave builds workflow automation software for mid-size businesses. We're a 40-person,
+  Series A team looking for early-career engineers.
+
+  As a Software Engineer I you will:
+  - Build backend services and APIs (we use Java and Python)
+  - Work with MySQL and MongoDB
+  - Ship features end to end with code review and CI/CD
+  - Deploy on AWS using Docker
+
+  We'd love:
+  - 0-1 years of experience (freshers and recent graduates welcome)
+  - Solid CS fundamentals: data structures, algorithms, OOP
+  - Any backend framework (Spring Boot, Django, Flask, Express)
+expected:
+  decision: apply
+  resume_id: software_dev

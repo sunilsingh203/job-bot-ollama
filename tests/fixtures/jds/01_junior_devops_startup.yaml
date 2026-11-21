@@ -1,0 +1,22 @@
+title: Junior DevOps Engineer
+company: CloudNest Labs
+location: Bengaluru, Karnataka (Hybrid)
+company_size: 11-50 employees
+description: |
+  CloudNest Labs is a seed-funded startup building a developer platform for SaaS teams.
+  We are looking for a Junior DevOps Engineer to help us scale our AWS infrastructure.
+
+  Responsibilities:
+  - Manage AWS infrastructure (EC2, VPC, IAM, S3) using Terraform
+  - Build and maintain CI/CD pipelines with GitHub Actions
+  - Containerise services with Docker and deploy them on Kubernetes (EKS)
+  - Monitor systems with CloudWatch and help reduce cloud spend
+
+  Requirements:
+  - 0-2 years of experience in DevOps or cloud engineering (internships count)
+  - Hands-on with Terraform, Docker and Kubernetes
+  - Scripting in Python or Bash
+  - Comfortable working in a fast-moving startup environment
+expected:
+  decision: apply
+  resume_id: devops_cloud

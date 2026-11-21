@@ -1,0 +1,30 @@
+# Copy to config/settings.yaml to override defaults. Every key is optional.
+
+llm:
+  base_url: http://localhost:11434
+  model: gpt-oss:20b          # swap for a smaller model (e.g. a 7-8B q4) if too slow
+  temperature: 0.0
+  num_ctx: 8192
+  think: low                  # gpt-oss: low|medium|high. Other models: true/false or null
+  timeout_s: 600
+  max_jd_chars: 6000          # longer job descriptions are truncated before the LLM call
+
+matching:
+  min_score_to_apply: 60      # LLM "apply" below this score is downgraded to skip
+  experience_tolerance_years: 2.0   # skip if JD minimum > your experience + this
+  senior_title_min_experience: 4.0  # below this, titles like Senior/Lead/Architect are skipped
+  senior_title_keywords: [senior, sr, lead, principal, staff, architect, manager, head, director, vp]
+  mnc_min_employees: 1000     # company size >= this counts as MNC
+  blacklist_companies: []
+  blacklist_keywords: []      # e.g. ["unpaid", "commission only"]
+
+browser:
+  channel: chrome             # your installed Google Chrome; always runs visible (never headless)
+  profile_dir: browser_profile   # dedicated Chrome profile; sign in once with `jobbot login`
+  human_wait_timeout_s: 300   # how long to wait for you to solve a Cloudflare check / sign in
+
+scan:
+  base_url: https://in.indeed.com
+  delay_min_s: 2.5            # random pause between clicks / page loads
+  delay_max_s: 6.0
+  max_new_jobs_per_run: 80    # cap on new job descriptions fetched per `jobbot scan`
