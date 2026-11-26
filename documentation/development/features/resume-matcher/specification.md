@@ -1,6 +1,6 @@
 # Specification: `resume-matcher` (Step 1)
 
-Status: As-built — documented retroactively on 2026-11-26 from the existing code. Awaiting review by the approver (plan-approval.md is written by a human only).
+Status: As-built — documented retroactively on 2026-11-26 from the existing code. Awaiting review by the approver (approval: by the developer, by hand or recorded from chat — ADR-0005).
 
 - Lane: A (new capability), documented after the fact
 - Governance level: standard

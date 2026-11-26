@@ -126,9 +126,13 @@ All templates live in [`templates/`](templates/).
    security / tests / docs), **explicit DB changes with migration file names**, module
    interfaces and CLI commands, dashboard screens, a test plan mapped to the ACs, ordered
    steps, risks, open questions and the ADRs needed.
-3. **Approve** -> `plan-approval.md`, **written by the human approver only**: approver,
-   date, the Git commit hash at which the spec and plan were approved, the scope approved,
-   conditions. **The AI never creates, fills in or fakes this file.**
+3. **Approve** -> `plan-approval.md`: approver, date, the Git commit hash at which the spec and
+   plan were approved, the scope approved, conditions. Either the developer writes it by hand, or
+   the developer **explicitly approves that specific plan in chat** and the AI records it, marked
+   "Recorded by the AI from the developer's chat approval" with the developer's words quoted
+   ([ADR-0005](decisions/ADR-0005-chat-approvals-recorded-by-ai.md)). **The AI never approves on
+   its own, from a vague go-ahead that doesn't name the plan, or while blocking questions are
+   open, and never fakes an approval.**
 4. **Implement**: only when `plan-approval.md` exists. Under standard governance, if the spec or
    plan changed after the approved commit, or implementation shows they must change, the AI stops
    that part, updates the docs and tells the developer before continuing.
@@ -139,7 +143,7 @@ All templates live in [`templates/`](templates/).
 ### Lane B: material change
 
 Same as Lane A, inside `features/<capability>/changes/<change>/`:
-`change-definition.md` -> `implementation-plan.md` -> `plan-approval.md` (human) -> implement -> `review.md`.
+`change-definition.md` -> `implementation-plan.md` -> `plan-approval.md` (developer, by hand or recorded from chat) -> implement -> `review.md`.
 
 ### Lane C: small change / fix
 
@@ -168,7 +172,8 @@ The developer asks in chat ("rename this flag", "change the default delay"). The
   proposes a resolution and follows the developer's choice.
 - Templates are starting points. Sections can be added, removed or renamed per feature.
 - These protections **stay in place unless the developer explicitly removes them**:
-  - the human-only `plan-approval.md`
+  - `plan-approval.md` needs the developer's explicit approval (by hand, or recorded from an
+    explicit chat approval of that plan; ADR-0005)
   - explicit SQL migration files
   - no secrets or personal data in Git
   - the `CLAUDE.md` safety rules: never auto-submit, local-only LLM and data, no scripted login,
@@ -204,7 +209,7 @@ and ends with a short report: what changed, where, and what's next.
 | Level | Rule |
 |---|---|
 | strict | Approval file **and** a commit-hash match are required before any feature implementation. Chat requests for Lanes A/B are refused until approved. |
-| **standard (selected)** | Lanes A/B need a human-written `plan-approval.md` before implementation. Lanes C/D go ahead on the developer's chat go-ahead. The AI records decisions in the docs. |
+| **standard (selected)** | Lanes A/B need a `plan-approval.md` (written by the developer, or recorded by the AI from the developer's explicit chat approval) before implementation. Lanes C/D go ahead on the developer's chat go-ahead. The AI records decisions in the docs. |
 | light | Spec and plan are optional. The AI updates docs after the fact. |
 
 The developer can switch levels for the whole project or for one feature. Record a switch in

@@ -38,6 +38,7 @@ commit, and never use `git add -f` on these paths. Test fixtures must not contai
 (scrub real pages before saving them under `tests/fixtures/`).
 
 ## Approval files
-- `plan-approval.md` is written and committed by the human approver. The AI never creates,
-  edits or commits it.
+- `plan-approval.md` is written by the developer, or recorded by the AI from the developer's
+  explicit chat approval of that plan (ADR-0005). The AI commits it only when asked, and never
+  edits an existing approval.
 - The "Approved commit hash" in it is the commit that contains the approved spec and plan.

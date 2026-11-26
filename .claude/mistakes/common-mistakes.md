@@ -48,7 +48,7 @@ Entry format:
 - **How to avoid:** write docs from the code as it is, not from the plan. Label anything not built
   yet "(planned)". In a review, check every documented claim against the code with a grep.
 - **Evidence:** as-built review, 2026-11-26 (`features/*/specification.md`, Open questions).
-- **Seen:** 1× (last 2026-11-26) · **Clean streak:** 0/3
+- **Seen:** 1× (last 2026-11-26) · **Clean streak:** 1/3 (2026-11-27: three change definitions described current behaviour from the code)
 
 ## M-002: Code paths shipped without tests
 - **Mistake:** 36 acceptance criteria across the 3 built capabilities have no automated test, for example:

@@ -12,7 +12,7 @@
 | Architecture | `documentation/development/architecture/` (`overview.md`, `security.md`, `data.md`) | AI keeps in sync |
 | Feature specs, plans, reviews | `documentation/development/features/<capability>/` | AI drafts, developer approves |
 | Material changes | `documentation/development/features/<capability>/changes/<change>/` | AI drafts, developer approves |
-| Plan approvals | `.../plan-approval.md` | **human approver only** |
+| Plan approvals | `.../plan-approval.md` | **the developer** (or the AI recording their explicit chat approval, ADR-0005) |
 | Small changes | `documentation/development/changes/<change>/` | developer (request), AI (plan, review) |
 | Decisions | `documentation/development/decisions/ADR-NNNN-title.md` | AI drafts, developer accepts |
 | Standards | `documentation/development/standards/` | developer + AI |

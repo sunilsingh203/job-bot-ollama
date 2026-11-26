@@ -24,6 +24,8 @@ If `$ARGUMENTS` is empty, ask which capability to define and stop.
 - `.claude/rules/*.md`
 - Existing specs of related capabilities in `documentation/development/features/`
 - For Lane B: the capability's current `specification.md` and `changelog.md`
+- For Lane B: `request.md` in the change folder, if present (the developer's what/why/done-when;
+  treat its open questions as questions to resolve, not as decided rules)
 
 ## 2. Inspect the code
 Look at what already exists in `src/jobbot/` and `tests/` for this capability (modules, CLI

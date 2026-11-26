@@ -1,6 +1,6 @@
 # Specification: indeed-scanner
 
-Status: As-built — documented retroactively on 2026-11-26 from the existing code. Awaiting review by the approver (plan-approval.md is written by a human only).
+Status: As-built — documented retroactively on 2026-11-26 from the existing code. Awaiting review by the approver (approval: by the developer, by hand or recorded from chat — ADR-0005).
 
 Capability: scan Indeed India search results in a visible, human-supervised Chrome window,
 store every listing in the job store, and read each job's full description.

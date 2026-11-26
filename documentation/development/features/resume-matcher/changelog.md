@@ -4,7 +4,7 @@
 
 - Added `specification.md` (Purpose, Business rules BR-1..BR-12, data entities, AC-1..AC-35, OQ-1..OQ-17) and `implementation-plan.md`, both reconstructed from the code at commit `c3677ba`.
 - No code changes. `pytest` run: 66 passed (whole suite). `jobbot eval` was not run.
-- Status: awaiting review by the approver. `plan-approval.md` must be written by a human.
+- Status: awaiting review by the approver. `plan-approval.md` comes from the developer (by hand or recorded from chat, ADR-0005).
 
 ## 2026-11-21: Initial implementation (commit c3677ba)
 

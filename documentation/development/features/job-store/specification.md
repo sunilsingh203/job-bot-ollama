@@ -1,6 +1,6 @@
 # Specification: job-store
 
-Status: As-built — documented retroactively on 2026-11-26 from the existing code. Awaiting review by the approver (plan-approval.md is written by a human only).
+Status: As-built — documented retroactively on 2026-11-26 from the existing code. Awaiting review by the approver (approval: by the developer, by hand or recorded from chat — ADR-0005).
 
 Capability: a local SQLite store of every job the bot has seen (one row per platform job,
 with its latest decision), the job status lifecycle, and the "decide over the DB" pipeline
