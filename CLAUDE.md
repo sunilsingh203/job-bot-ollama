@@ -19,6 +19,25 @@ A personal tool that finds jobs on Indeed, uses a **local LLM** to read each job
 
 ---
 
+## Development workflow (spec-driven, governance: **standard**)
+
+Short guide for humans: `documentation/development/WORKFLOW-GUIDE.md`. Full workflow: `documentation/development/AI-DEVELOPMENT-WORKFLOW.md`. Focused rules: `.claude/rules/`. Slash commands: `.claude/commands/` (`/define-feature`, `/plan-feature`, `/implement-feature`, `/review-feature`, `/remediate-review`, `/plan-small-change`, `/implement-small-change`, `/review-small-change`).
+
+1. **Classify work first.** A: new capability → `documentation/development/features/<capability>/`. B: material change → `features/<capability>/changes/<change>/`. C: small fix → `documentation/development/changes/<change>/`. D: trivial chat tweak → just do it, add a `changelog.md` line if documented behaviour changed. If "small" work touches business behaviour, persisted data meaning, the DB schema, safety rules (auto-submit, Indeed account protection, local-only data), the LLM decision contract or prompts, say so and recommend Lane B.
+2. **Lanes A/B:** `specification.md` (numbered ACs) → `implementation-plan.md` → **`plan-approval.md` written by the developer only** → implement → `review.md` → remediate. **Never create, fill or fake `plan-approval.md`.** No implementation for A/B without it (unless the developer explicitly approves in chat; then record that in the plan).
+3. **Lanes C/D** proceed on the developer's go-ahead in chat.
+4. **Schema changes only via SQL migration files** in `src/jobbot/migrations/NNNN_name.sql` (applied by `JobStore` via `PRAGMA user_version`). No DDL in Python code. Never edit a migration that has already been applied; add a new numbered file instead. Destructive changes (drops, data rewrites) need explicit approval.
+5. Before coding: read the feature's spec/plan and the existing code, list ambiguities and **ask rather than invent rules**. Then plan briefly, implement, run `pytest` + `ruff`, check against the ACs, and update docs. **Never claim a command passed without running it.**
+6. Chat instructions may refine or override a spec: point out any conflict in one line, follow the developer's choice, and record it in the docs (the repo is the lasting record, not the chat).
+7. Stay in scope. No new frameworks or libraries without proposing them first. Record significant decisions as ADRs in `documentation/development/decisions/`.
+8. **Common-mistakes log** (`.claude/mistakes/common-mistakes.md`, loaded below). Before finishing a task, check your work against every relevant "How to avoid" line. Add an entry when the developer corrects you or a review finds a defect you introduced. If the same mistake happens again, add 1 to its count and reset its streak. Add 1 to the streak when you avoided a mistake whose situation came up. Delete an entry at a streak of 3/3 or when a test/lint/hook now guards against it. Report all changes to the log at the end of the task.
+
+@.claude/mistakes/common-mistakes.md
+
+Capabilities: `resume-matcher`, `indeed-scanner` and `job-store` are built (as-built specs are awaiting the developer's review). `review-dashboard` and `form-filler` are planned (no spec yet).
+
+---
+
 ## Decisions so far
 
 | Topic | Decision |
@@ -112,13 +131,19 @@ local-llm-job-automate/
 │   ├── settings.example.yaml   # model name, daily caps, delays, thresholds
 │   ├── searches.yaml           # Indeed saved searches (keyword × location)
 │   └── mnc_companies.txt
+├── documentation/              # spec-driven workflow docs (see "Development workflow")
+│   ├── customer/
+│   └── development/            # AI-DEVELOPMENT-WORKFLOW.md, architecture/, features/,
+│                               # decisions/ (ADRs), standards/, changes/, templates/
+├── .claude/rules/ , .claude/commands/
 ├── profile.example.yaml        # template for the user's form-answer facts
 ├── resumes/                    # gitignored: PDFs + resumes.yaml
 ├── data/                       # gitignored: jobs.db, logs, screenshots
 ├── browser_profile/            # gitignored: persistent Chrome profile
 ├── src/jobbot/
 │   ├── config.py               # load + validate YAML (pydantic)
-│   ├── db.py                   # SQLite models / queries
+│   ├── db.py                   # SQLite JobStore + migration runner
+│   ├── migrations/             # NNNN_*.sql schema migrations (the only schema record)
 │   ├── llm/
 │   │   ├── client.py           # Ollama client (OpenAI-compatible or native API)
 │   │   └── prompts.py          # all prompt templates live here
