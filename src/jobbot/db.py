@@ -9,48 +9,115 @@ Status lifecycle:
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
+from importlib import resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Any
 
 from jobbot.models import Decision, Job
 
-SCHEMA_VERSION = 1
+_MIGRATIONS_PACKAGE = "jobbot.migrations"
+_MIGRATION_FILE = re.compile(r"^(\d{4})_\w+\.sql$")
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS jobs (
-    id                 INTEGER PRIMARY KEY,
-    platform           TEXT NOT NULL,
-    job_key            TEXT NOT NULL,
-    url                TEXT,
-    title              TEXT NOT NULL DEFAULT '',
-    company            TEXT NOT NULL DEFAULT '',
-    location           TEXT NOT NULL DEFAULT '',
-    description        TEXT,
-    description_sha256 TEXT,
-    snippet            TEXT,
-    salary             TEXT,
-    posted_at          TEXT,
-    easy_apply         INTEGER,
-    remote             INTEGER,
-    company_size       TEXT,
-    search_name        TEXT,
-    status             TEXT NOT NULL DEFAULT 'new',
-    decision           TEXT,
-    resume_id          TEXT,
-    score              INTEGER,
-    reason             TEXT,
-    decision_json      TEXT,
-    error              TEXT,
-    first_seen_at      TEXT NOT NULL,
-    updated_at         TEXT NOT NULL,
-    decided_at         TEXT,
-    UNIQUE (platform, job_key)
-);
-CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs (status);
-CREATE INDEX IF NOT EXISTS idx_jobs_desc ON jobs (description_sha256);
-"""
+
+class MigrationError(RuntimeError):
+    """The schema migrations are broken, failed, or the DB is newer than this jobbot."""
+
+
+@dataclass(frozen=True)
+class Migration:
+    version: int
+    name: str
+    sql: str
+
+
+def load_migrations(source: Traversable | None = None) -> list[Migration]:
+    """Read ``NNNN_<name>.sql`` files (default: the ``jobbot.migrations`` package), sorted.
+
+    Fails loudly unless the numbers are exactly 1..N (no gaps, no duplicates, not empty).
+    """
+    root = source if source is not None else resources.files(_MIGRATIONS_PACKAGE)
+    found: list[Migration] = []
+    for entry in root.iterdir():
+        match = _MIGRATION_FILE.match(entry.name)
+        if match and entry.is_file():
+            found.append(
+                Migration(int(match.group(1)), entry.name, entry.read_text(encoding="utf-8"))
+            )
+    found.sort(key=lambda m: (m.version, m.name))
+    _check_sequence(found)
+    return found
+
+
+def _check_sequence(migrations: Sequence[Migration]) -> None:
+    if not migrations:
+        raise MigrationError("No schema migrations found")
+    names = [m.name for m in migrations]
+    versions = [m.version for m in migrations]
+    if len(set(versions)) != len(versions):
+        raise MigrationError(f"Duplicate migration numbers: {names}")
+    if versions != list(range(1, len(versions) + 1)):
+        raise MigrationError(f"Migration numbers must be contiguous from 0001: {names}")
+
+
+def _user_version(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("PRAGMA user_version").fetchone()[0])
+
+
+def migrate(conn: sqlite3.Connection, migrations: Sequence[Migration] | None = None) -> int:
+    """Apply pending migrations in order. Returns the resulting schema version.
+
+    Each migration and its ``PRAGMA user_version`` bump run in one ``BEGIN IMMEDIATE``
+    transaction. The connection is switched to ``autocommit=True`` meanwhile, because in the
+    default (legacy) mode ``executescript`` COMMITs any open transaction before it runs.
+    """
+    migrations = load_migrations() if migrations is None else list(migrations)
+    _check_sequence(migrations)
+    latest = migrations[-1].version
+    current = _user_version(conn)
+    if current > latest:
+        raise MigrationError(
+            f"Database schema version {current} is newer than this jobbot supports ({latest}). "
+            "It was created by a newer jobbot; upgrade jobbot instead of opening it."
+        )
+    if current == latest:
+        return current
+
+    conn.commit()
+    saved_mode = conn.autocommit
+    conn.autocommit = True
+    try:
+        for migration in migrations:
+            if migration.version <= current:
+                continue
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Re-check under the write lock: another process may have migrated meanwhile.
+                current = _user_version(conn)
+                if migration.version <= current:
+                    conn.execute("ROLLBACK")
+                    continue
+                conn.executescript(migration.sql)
+                conn.execute(f"PRAGMA user_version = {migration.version:d}")
+                conn.execute("COMMIT")
+                current = migration.version
+            except BaseException as exc:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                if isinstance(exc, Exception):
+                    raise MigrationError(f"Migration {migration.name} failed: {exc}") from exc
+                raise
+    finally:
+        conn.autocommit = saved_mode
+    return current
+
+
+SCHEMA_VERSION: int = load_migrations()[-1].version
 
 # Statuses a job can be in before/without an LLM decision.
 UNDECIDED = ("new",)
@@ -74,9 +141,11 @@ class JobStore:
         self.path = path
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
-        self.conn.executescript(_SCHEMA)
-        self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-        self.conn.commit()
+        try:
+            migrate(self.conn)
+        except BaseException:
+            self.conn.close()
+            raise
 
     def close(self) -> None:
         self.conn.close()
