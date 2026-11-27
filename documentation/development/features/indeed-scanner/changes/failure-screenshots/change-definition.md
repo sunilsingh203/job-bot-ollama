@@ -6,7 +6,7 @@
 | | |
 |---|---|
 | Capability | `indeed-scanner` ([specification.md](../../specification.md)) |
-| Status | **All open questions resolved 2026-11-27 (OQ-5 guard: yes; A-8 confirmed); awaiting plan approval** |
+| Status | **Implemented 2026-11-28 (uncommitted, awaiting `/review-feature`).** All open questions resolved 2026-11-27 (OQ-5 guard: yes; A-8 confirmed); plan approved (see `plan-approval.md`) |
 | Date | 2026-11-27 |
 | Touches | Indeed integration (scanner failure handling), CLI scan output, `data/` files, config (`browser.screenshots_keep`, OQ-2). No DB, prompt or decision-schema change. |
 | Plan | [implementation-plan.md](implementation-plan.md) |

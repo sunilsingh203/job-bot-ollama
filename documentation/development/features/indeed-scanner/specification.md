@@ -6,7 +6,9 @@ Capability: scan Indeed India search results in a visible, human-supervised Chro
 store every listing in the job store, and read each job's full description.
 Pipeline position: `SCAN` (this capability) -> `FILTER` / `DECIDE` (resume-matcher, via job-store).
 
-All file:line references are to commit `c3677ba`.
+All file:line references are to commit `c3677ba`, except where a rule was added or changed by
+[`changes/failure-screenshots`](changes/failure-screenshots/change-definition.md) (built 2026-11-28);
+those rows name the function instead.
 
 ---
 
@@ -46,6 +48,7 @@ In scope:
 - Random, human-like pacing and a per-run cap on descriptions read.
 - `jobbot login`: open the profile so the user can sign in by hand once, and check the sign-in state through Indeed's own `loggedIn` flag.
 - `jobbot scan` CLI options: `--search/-s` (subset of searches), `--pages` (override `max_pages`), `--decide` (run the decide step afterwards).
+- Saving a local failure snapshot (PNG + HTML) to `data/screenshots/` at five failure points (BR-13).
 
 Out of scope (not implemented, or owned by other capabilities):
 - Rule filtering and the LLM apply/skip decision (resume-matcher; started from job-store `decide_pending`).
@@ -54,7 +57,7 @@ Out of scope (not implemented, or owned by other capabilities):
 - Platforms other than Indeed India.
 - Any automated login, credential storage, CAPTCHA solving or challenge bypass. These are forbidden, not just out of scope.
 - Headless operation (forbidden).
-- Saving screenshots on failure (required by CLAUDE.md but **not implemented**; see Open questions).
+- Snapshots in `jobbot login` (A-6 of `failure-screenshots`), and snapshots for unexpected Playwright errors outside the five failure points (these still end in a traceback; see Open questions).
 
 ## 4. Business rules
 
@@ -62,7 +65,7 @@ Out of scope (not implemented, or owned by other capabilities):
 |---|---|---|
 | BR-1 | The browser is always headed (`headless=False`) and uses a dedicated persistent profile directory (`browser.profile_dir`, default `browser_profile/`). | `src/jobbot/browser.py:35-40`, `src/jobbot/config.py:57-62` |
 | BR-2 | The bot never types credentials or scripts a login. `jobbot login` only opens the sign-in page and waits for the user. | `src/jobbot/cli.py:261-307` |
-| BR-3 | When a Cloudflare challenge or a sign-in page is detected, the bot stops acting, prints a message, brings the window to the front, and polls every 2 s until the user resolves it, for up to `browser.human_wait_timeout_s` (default 300 s). | `src/jobbot/browser.py:60-84`, `scanner.py:203-222` |
+| BR-3 | When a Cloudflare challenge or a sign-in page is detected, the bot stops acting, prints a message, brings the window to the front, and polls every 2 s until the user resolves it, for up to `browser.human_wait_timeout_s` (default 300 s). **On a timeout** (changed 2026-11-27 by the developer's decision OQ-4 of `failure-screenshots`; before, every timeout stopped the scan): a `human_timeout` snapshot is saved, `! still blocked after Ns - skipped this page` (or `job`) is printed, and the item is skipped. On a results page, that search's paging stops and the scan moves to the next search (A-8). In the description reader, that job is skipped (NULL description, retried next scan). The bot never interacts with the check, and every later check waits for the human again. **Stops instead:** if the window was closed (no snapshot), or on the 2nd timeout in a row (BR-14). | `browser.wait_for_human`, `scanner._check_blockers`, `scanner._skip_after_human_timeout` |
 | BR-4 | Search results are parsed from the embedded JSON `window.mosaic.providerData["mosaic-provider-jobcards"]` -> `metaData.mosaicProviderJobCardsModel.results[]`. If the JSON is missing, has no `results` list or cannot be decoded, the DOM fallback (`a[data-jk]` cards) is used. | `parse.py:49-54`, `parse.py:79-90` |
 | BR-5 | A job's identity is `(platform="indeed", job_key=jk)`. Listings are de-duplicated within a page by job key and across runs by the job store's unique key. | `parse.py:144-151`, `db.py:49` |
 | BR-6 | A description is fetched only for stored jobs whose `description` is NULL (`needs_description`). Jobs seen again in a later scan are not re-read. | `scanner.py:117`, `db.py:204-206` |
@@ -72,10 +75,13 @@ Out of scope (not implemented, or owned by other capabilities):
 | BR-10 | All Indeed selectors and text markers live in `platforms/indeed/parse.py` (with the exceptions noted in Open questions). | `parse.py:21-32` |
 | BR-11 | Scan and decide are separate steps. Scanning never needs the LLM; `--decide` simply runs the decide step after the browser has closed. | `cli.py:330-354` |
 | BR-12 | Progress is durable: every upsert and description write is committed immediately, so an interrupted scan (timeout, Ctrl+C) keeps what it stored. | `db.py` (commit after each write), `cli.py:336-341` |
+| BR-13 | **Failure snapshots.** At five failure points the scanner saves `data/screenshots/<YYYYMMDD-HHMMSS-mmm>_<reason>[_<jobkey>].png` and `.html` (local time; full-page PNG with a 10 s timeout; HTML as UTF-8) and prints `screenshot: <path> (+ .html)`. Reasons: `goto_error` (results page failed to load: **the scan stops**), `no_cards` (only on a search's first page, or on the results reload inside the description retry; a later empty page is the end of results), `dom_fallback` (once per run; the summary gains a line), `no_description` (once per job, after both attempts; key part = the sanitised job key, `[A-Za-z0-9]` only, at most 32 chars), `human_timeout` (BR-3). The snapshot only reads the page (`is_closed`, `screenshot`, `content`), never navigates or clicks, and never raises: any error becomes one `! could not save screenshot: ...` line and the scan carries on as if it had worked. After each save only the newest `browser.screenshots_keep` (default 50, min 1) sets are kept; other files in the folder are left alone. | `browser.save_snapshot`, `browser.prune_snapshots`, `scanner._snapshot` |
+| BR-14 | **Guard:** `HUMAN_TIMEOUTS_IN_A_ROW_LIMIT = 2` human-wait timeouts in a row (no blocker check passed and no description was read in between) stop the scan with `HumanActionTimeout` after the snapshot, to protect the account (OQ-5, accepted 2026-11-27). | `scanner._skip_after_human_timeout`, `scanner._handle_blockers` |
 
 ## 5. Data entities
 
-The scanner itself persists nothing outside the job store (and the Chrome profile managed by Chrome).
+The scanner persists nothing outside the job store (and the Chrome profile managed by Chrome),
+except failure snapshots in `data/screenshots/` (BR-13).
 
 | Entity | Fields | Notes |
 |---|---|---|
@@ -83,7 +89,8 @@ The scanner itself persists nothing outside the job store (and the Chrome profil
 | `Listing` (in memory) | `job: Job`, `snippet: str | None`, `sponsored: bool` | `sponsored` is parsed but never stored or used. `parse.py:35-39` |
 | `SearchPage` (in memory) | `listings`, `logged_in: bool | None`, `source: "json" | "dom"` | `logged_in` is only known on the JSON path. `parse.py:42-46` |
 | `Job` fields set by the scanner | `title`, `company`, `location`, `url` (`{base}/viewjob?jk={jk}`), `platform="indeed"`, `job_key`, `easy_apply`, `remote`, `salary`, `posted_at` (ISO date, UTC), `description` (later) | `src/jobbot/models.py:11-27`; see field mapping below |
-| `ScanStats` (in memory, printed) | `pages`, `listings_seen`, `new_jobs`, `descriptions`, `description_failures`, `duplicates`, `logged_in`, `per_search`, `stopped_early` | `scanner.py:29-39` |
+| `ScanStats` (in memory, printed) | `pages`, `listings_seen`, `new_jobs`, `descriptions`, `description_failures`, `duplicates`, `logged_in`, `per_search`, `stopped_early`, `dom_fallback_pages`, `dom_fallback_snapshot`, `human_timeouts` | `scanner.ScanStats` |
+| Failure snapshot set (`data/screenshots/`) | `<stem>.png` + `<stem>.html`, stem `<YYYYMMDD-HHMMSS-mmm>_<reason>[_<jobkey>]` | Local and gitignored; newest `browser.screenshots_keep` sets kept. The HTML (and PNG) can hold the signed-in name/email and session tokens: never share or turn into a fixture without scrubbing. `browser.Snapshot` describes what was written. |
 | Job row | See the job-store specification. | `db.py` |
 
 Field mapping, JSON path (`parse.py:93-115`):
@@ -123,10 +130,12 @@ Scan-run states (in memory):
 
 | State | Trigger | Next |
 |---|---|---|
-| Loading results page | `goto(search_url)` | Blocked / Parsing / No results |
+| Loading results page | `goto(search_url)` | Blocked / Parsing / No results / Stopped by page-load error |
+| Stopped by page-load error | `goto` raised | `goto_error` snapshot; `PageLoadError` -> `Scan stopped: page load failed: ... Screenshot: ...`; progress kept |
 | Blocked (challenge or sign-in) | `is_challenge` / `is_signin` true | Waiting for human |
 | Waiting for human | user resolves it | resume previous action |
-| Waiting for human | timeout or window closed | Scan stopped (`HumanActionTimeout`); progress kept |
+| Waiting for human | timeout | `human_timeout` snapshot; item skipped (page: next search; job: next job) |
+| Waiting for human | window closed, or 2nd timeout in a row (BR-14) | Scan stopped (`HumanActionTimeout`); progress kept |
 | Parsing / reading descriptions | — | next card / next page / next search |
 | Stopped early | description cap reached | summary printed with `Stopped early: reached max_new_jobs_per_run=N` |
 | Done | all searches processed | summary printed; optional decide step |
@@ -160,15 +169,17 @@ Scan-run states (in memory):
 |---|---|---|
 | Chrome cannot start (profile locked by another window, Chrome missing) | `BrowserError` -> `Error: Could not start Chrome ... Is another jobbot window still open?` exit 1 | `browser.py:41-45`, `cli.py:338-339` |
 | Cloudflare challenge / sign-in redirect | Pause and wait for the human (BR-3) | `scanner.py:203-222` |
-| Human does not resolve within `human_wait_timeout_s` | `HumanActionTimeout` -> `Scan stopped: Still blocked after Ns: ... (progress is saved)` | `browser.py:84`, `cli.py:336-337` |
-| User closes the browser window while waiting | `HumanActionTimeout("The browser window was closed.")` | `browser.py:78-79` |
-| Ctrl+C | `Scan interrupted (progress is saved).` | `cli.py:340-341` |
-| Results page shows no cards within 20 s | `no results on this page`; this search's paging stops | `scanner.py:92-98` |
-| Mosaic JSON missing or undecodable | Silent DOM fallback (`source="dom"`, `logged_in=None`) | `parse.py:49-54, 79-90` |
-| Description not read (timeout 15 s, card missing, blocked, Playwright error) | One retry (after reloading results if the bot had to wait for the human); then counted in `description_failures`, `! no description: ...` printed; job keeps a NULL description and is retried on the next scan | `scanner.py:143-155, 132-134` |
+| Human does not resolve within `human_wait_timeout_s` | `human_timeout` snapshot, `! still blocked after Ns - skipped this page` (or `job`), item skipped (BR-3); the summary gains `Skipped after an unsolved check/sign-in: N`. The 2nd in a row stops the scan: `Scan stopped: 2 checks/sign-ins in a row were not solved; stopping the scan to protect the Indeed account. Screenshot: <path> (progress is saved)` (BR-14) | `scanner._skip_after_human_timeout`, `cli.scan` |
+| User closes the browser window while waiting | No snapshot; scan stops: `Scan stopped: The browser window was closed. Screenshot: none (window closed) (progress is saved)` | `browser.wait_for_human`, `scanner._skip_after_human_timeout` |
+| Ctrl+C | `Scan interrupted (progress is saved).` (a snapshot in progress does not swallow Ctrl+C) | `cli.py:340-341` |
+| Results page shows no cards within 20 s | `no results on this page`; this search's paging stops. `no_cards` snapshot only on a search's first page or the description-retry reload | `scanner._load_results` |
+| Mosaic JSON missing or undecodable | DOM fallback (`source="dom"`, `logged_in=None`); on the first such page of a run: `job JSON missing - reading cards from the page (DOM fallback)` + `dom_fallback` snapshot; summary: `DOM fallback used on N pages (job JSON missing). Screenshot: <path>` | `parse.py:49-54, 79-90`, `scanner._note_dom_fallback` |
+| Description not read (timeout 15 s, card missing, blocked, Playwright error) | One retry (after reloading results if the bot had to wait for the human); then counted in `description_failures`, `! no description: ...` printed, one `no_description_<jobkey>` snapshot; job keeps a NULL description and is retried on the next scan. A job given up because of a human-wait timeout or an empty reload gets only that snapshot | `scanner._read_description` |
 | Card opens as a full `/viewjob` page | Description parsed from that page, then `go_back` to results | `scanner.py:174-178` |
-| Navigation errors outside the description reader (e.g. `page.goto` timeout on a results page) | Not caught: the Playwright exception propagates and the CLI ends with a traceback. Committed rows are kept. No screenshot. | `scanner.py:90`, `cli.py:332-341` |
-| Indeed DOM/JSON changes | Falls back to DOM; if that also fails, pages yield "no results" or description failures. Not a loud failure, no screenshot (see Open questions). | — |
+| `page.goto` of a results page fails (network error, timeout, Chrome error page), also on the description-retry reload | `goto_error` snapshot, then the scan **stops**: `Scan stopped: page load failed: <first line>. Screenshot: <path> (progress is saved)`, exit 0, no traceback; `--decide` still runs | `scanner._load_results`, `browser.PageLoadError`, `cli.scan` |
+| A snapshot can't be written (screenshot/HTML/folder/prune error) | One `! could not save screenshot: ...` (or `! could not delete old screenshot ...`) line; the scan takes the same path as if it had worked | `browser.save_snapshot` |
+| Other unexpected Playwright errors (e.g. a non-timeout error from `wait_for_selector`, or `page.content()` failing while parsing) | Not caught: traceback, no snapshot (A-7 / R-6 of `failure-screenshots`). Committed rows are kept. | `scanner._load_results` |
+| Indeed DOM/JSON changes | Falls back to DOM (snapshot once per run); if that also fails, pages yield "no results" or description failures, each with a snapshot as above. | — |
 
 ## 10. Acceptance criteria (current behaviour)
 
@@ -196,11 +207,11 @@ Verified by: tests/test_indeed_parse.py::test_parse_description
 **AC-8: Blocker detection.** `is_challenge` is true when the title contains "just a moment", or the first 60,000 characters of the HTML contain "additional verification required" or "verify you are human" (case-insensitive). `is_signin` is true when the URL contains `secure.indeed.com/auth`, `secure.indeed.com/account/login` or `/account/login`.
 Verified by: tests/test_indeed_parse.py::test_challenge_and_signin_detection
 
-**AC-9: Wait for human.** When a blocker is detected, the bot prints the instruction, brings the window to the front, polls every 2 s, continues with "Thanks - continuing." once it clears, and raises `HumanActionTimeout` after `browser.human_wait_timeout_s`, or immediately when the window is closed. Playwright errors during the check count as "still blocked".
-Gap: no automated test (manual: run `jobbot scan` until a Cloudflare check appears; confirm that the bot waits, resumes after you solve it, and stops with "Scan stopped ... (progress is saved)" if left unsolved past the timeout).
+**AC-9: Wait for human.** When a blocker is detected, the bot prints the instruction, brings the window to the front, polls every 2 s, continues with "Thanks - continuing." once it clears, and raises `HumanActionTimeout` after `browser.human_wait_timeout_s`, or immediately when the window is closed. Playwright errors during the check count as "still blocked". In the scanner, what follows a timeout is AC-32 (skip) and AC-37 (guard).
+Verified by (scanner use, with a fake page): tests/test_indeed_scanner.py::test_no_cards_on_retry_reload_snapshots_once (waits, then "Thanks - continuing."), ::test_human_timeout_on_results_page_skips_page, ::test_human_timeout_window_closed_stops_scan. Gap: the 2 s polling interval against a live check (manual: run `jobbot scan` until a Cloudflare check appears).
 
 **AC-10: Never automates past blockers.** No code path clicks, types into or otherwise interacts with a challenge or sign-in page; the only action while blocked is polling the page state.
-Gap: no automated test (manual: code review of `browser.wait_for_human` and `scanner._handle_blockers`).
+Verified by: tests/test_indeed_scanner.py::test_human_timeout_on_results_page_skips_page (only `title`/`content`/`is_closed`/`bring_to_front`/`screenshot` while blocked); plus code review of `browser.wait_for_human` and `scanner._handle_blockers`.
 
 **AC-11: Cross-run dedup.** A listing whose `(platform, job_key)` already exists is not inserted again and does not count as new; its description is fetched only if still NULL.
 Verified by: tests/test_db_pipeline.py::test_upsert_is_idempotent (store level). Gap: the scanner loop itself has no automated test (manual: run the same search twice; the second run reports `0 new jobs` for unchanged results).
@@ -229,16 +240,66 @@ Gap: no automated test (manual: run `jobbot login` with a fresh profile, sign in
 **AC-19: Scan CLI.** `jobbot scan [-s NAME ...] [--pages N] [--decide]` runs only the named searches (unknown names: error, exit 1), overrides `max_pages` with `--pages`, and prints `Scan done: P pages, L listings, N new jobs, D descriptions read, F failed, U duplicates | signed in: yes|no|unknown`. `signed in` reflects the last page that was loaded.
 Gap: no automated test (manual run).
 
-**AC-20: Interrupted scans keep progress.** On `HumanActionTimeout` or Ctrl+C, the CLI prints a "progress is saved" message, and all listings and descriptions stored before that point remain in `data/jobs.db`.
-Gap: no automated test (manual: Ctrl+C mid-scan, then `jobbot jobs`).
+**AC-20: Stopped scans keep progress.** When the scan stops (page-load error AC-28, window closed AC-32, guard AC-37) or on Ctrl+C, the CLI prints a "progress is saved" message (exit 0), and all listings and descriptions stored before that point remain in `data/jobs.db`. A single check/sign-in timeout no longer stops the scan (AC-32).
+Verified by: tests/test_indeed_scanner.py::test_goto_error_stops_scan_with_snapshot[later] (rows kept); tests/test_cli_scan.py (messages, exit 0). Gap: Ctrl+C (manual: Ctrl+C mid-scan, then `jobbot jobs`).
 
-**AC-21: Scan then decide.** With `--decide`, the decide step (job-store `decide_pending`) runs after the browser closes, also when the scan ended through `HumanActionTimeout` or Ctrl+C.
-Gap: no automated test (manual: `jobbot scan --decide` with Ollama running).
+**AC-21: Scan then decide.** With `--decide`, the decide step (job-store `decide_pending`) runs after the browser closes, also when the scan stopped (AC-20) or ended through Ctrl+C.
+Verified by: tests/test_cli_scan.py::test_scan_page_load_error_message, ::test_scan_window_closed_message (`_run_decide` patched). Gap: Ctrl+C and a real decide run (manual: `jobbot scan --decide` with Ollama running).
+
+### Added by `failure-screenshots` (2026-11-28; AC-C1..AC-C16 of the change definition)
+
+**AC-22 (AC-C1): Snapshot naming.** The stem is `<YYYYMMDD-HHMMSS-mmm>_<reason>[_<jobkey>]`; files `<stem>.png` and `<stem>.html` in `<data_dir>/screenshots/`, created if missing.
+Verified by: tests/test_snapshots.py::test_snapshot_stem_format, ::test_save_snapshot_writes_png_and_html
+
+**AC-23 (AC-C2): Job key sanitising.** Only `[A-Za-z0-9]`, at most 32 characters, no key part when nothing is left; the path stays inside the folder.
+Verified by: tests/test_snapshots.py::test_sanitize_job_key
+
+**AC-24 (AC-C3): PNG and HTML written,** HTML as UTF-8, one `screenshot:` line with the path.
+Verified by: tests/test_snapshots.py::test_save_snapshot_writes_png_and_html
+
+**AC-25 (AC-C4): A snapshot failure never crashes.** Screenshot, HTML or folder errors give one `! could not save screenshot` line (first line of the error only); the other file is still written. Ctrl+C is not swallowed.
+Verified by: tests/test_snapshots.py::test_save_snapshot_failure_never_raises, ::test_save_snapshot_lets_keyboard_interrupt_through
+
+**AC-26 (AC-C5): Retention.** The newest `browser.screenshots_keep` sets are kept (by name timestamp); other files are left alone; a delete error is a warning.
+Verified by: tests/test_snapshots.py::test_snapshots_to_prune_keeps_newest, ::test_prune_keeps_newest_sets_and_ignores_other_files, ::test_prune_error_is_a_warning
+
+**AC-27 (AC-C15): Keep count from config.** `browser.screenshots_keep`, default 50, below 1 rejected.
+Verified by: tests/test_snapshots.py::test_screenshots_keep_setting, ::test_save_snapshot_uses_keep_count
+
+**AC-28 (AC-C6, AC-C7): Page-load error stops the scan.** A `goto` error saves `goto_error`, loads and clicks nothing more, and raises `PageLoadError` (with the snapshot, or `not saved`); the CLI prints `Scan stopped: page load failed: <first line>. Screenshot: <path> (progress is saved)`, no traceback, and `--decide` still runs.
+Verified by: tests/test_indeed_scanner.py::test_goto_error_stops_scan_with_snapshot, ::test_goto_error_without_snapshot_still_stops; tests/test_cli_scan.py::test_scan_page_load_error_message
+
+**AC-29 (AC-C8): No cards.** `no_cards` only on a search's first page or the description-retry reload (that job is then given up with no other snapshot); a later empty page saves nothing; the scan goes on with the next search.
+Verified by: tests/test_indeed_scanner.py::test_no_cards_on_first_page_snapshots_and_continues, ::test_no_cards_after_full_page_is_end_of_results, ::test_no_cards_on_retry_reload_snapshots_once
+
+**AC-30 (AC-C9): DOM fallback.** Listings are processed as before; one `dom_fallback` snapshot per run; the summary prints `DOM fallback used on N pages (job JSON missing). Screenshot: <path>`.
+Verified by: tests/test_indeed_scanner.py::test_dom_fallback_snapshot_once_per_run; tests/test_cli_scan.py::test_scan_summary_reports_dom_fallback_and_skips, ::test_scan_summary_dom_fallback_without_snapshot
+
+**AC-31 (AC-C10): Unreadable description.** Exactly one `no_description_<jobkey>` set per job, NULL description, `description_failures` +1, next job read.
+Verified by: tests/test_indeed_scanner.py::test_unreadable_description_snapshots_once_and_moves_on
+
+**AC-32 (AC-C11): Check/sign-in timeout skips the item.** `human_timeout` snapshot and `! still blocked after Ns - skipped this page` (or `job`); results page: next search; description: next job; `ScanStats.human_timeouts` counts skips and the summary prints `Skipped after an unsolved check/sign-in: N`. Window closed: no snapshot, scan stops with `Screenshot: none (window closed)`.
+Verified by: tests/test_indeed_scanner.py::test_human_timeout_on_results_page_skips_page, ::test_human_timeout_in_description_skips_job, ::test_human_timeout_window_closed_stops_scan; tests/test_cli_scan.py::test_scan_window_closed_message, ::test_scan_summary_reports_dom_fallback_and_skips
+
+**AC-33 (AC-C12): A failed snapshot doesn't change the scan's path.** Same rows, counters and page loads, plus one warning.
+Verified by: tests/test_indeed_scanner.py::test_failed_snapshot_keeps_scan_path
+
+**AC-34 (AC-C13): The snapshot is read-only** (`is_closed`, `screenshot`, `content` only).
+Verified by: tests/test_snapshots.py::test_save_snapshot_only_reads_page, ::test_save_snapshot_window_closed_writes_nothing; plus code review.
+
+**AC-35 (AC-C14): Local and gitignored.** `git check-ignore -v data/screenshots/x.png` prints `.gitignore:14:data/` (run 2026-11-28); `browser.py` imports no network module.
+Verified by: manual check + code review.
+
+**AC-36: A normal scan writes no snapshot.**
+Verified by: tests/test_indeed_scanner.py::test_json_scan_takes_no_snapshot
+
+**AC-37 (AC-C16): Guard.** 2 timeouts in a row (pages or jobs) stop the scan with `HumanActionTimeout` after the snapshot; the CLI prints `Scan stopped: 2 checks/sign-ins in a row were not solved; ... Screenshot: <path> (progress is saved)`. Timeout, a clear page, timeout carries on.
+Verified by: tests/test_indeed_scanner.py::test_two_human_timeouts_in_a_row_stop_scan, ::test_timeout_count_resets_after_a_clear_page; tests/test_cli_scan.py::test_scan_guard_stop_message
 
 ## 11. Open questions & assumptions
 
 Inconsistencies with CLAUDE.md / docs:
-1. **No screenshots on failure.** CLAUDE.md says Indeed failures should "fail loudly with a screenshot saved to `data/screenshots/`". Nothing in `src/` writes screenshots. Description failures are only counted, and `goto` errors end in a raw traceback. TODO: decide whether to add screenshot capture.
+1. ~~**No screenshots on failure.**~~ **Resolved 2026-11-28** by `changes/failure-screenshots` (BR-13, BR-14, AC-22..AC-37). Decided by the developer on 2026-11-27: all five failure points, PNG + HTML, keep 50, a `goto` error stops the scan, and a check/sign-in timeout **skips the item and carries on (OQ-4)**. That is a deliberate departure from the earlier "stop the scan" behaviour, limited by the guard (2 in a row stop). Still open: other Playwright errors outside the five points end in a traceback with no snapshot (A-7). A "no jobs match" marker for `parse.py` would avoid `no_cards` snapshots on a genuinely empty first page (follow-up).
 2. **The cap counts descriptions, not new jobs.** The `max_new_jobs_per_run` name and the CLAUDE.md wording ("cap on new jobs") differ from the code (`stats.descriptions >= cap`, `scanner.py:138-139`). Descriptions back-filled for old rows count towards the cap, and new listings on the current page are still upserted after the cap is hit (they get a description on a later run).
 3. **Page size assumption.** `config/searches.yaml` says "~15 jobs each" per page, but the scanner steps `start` by 10 and treats `< 10` listings as the last page (`scanner.py:25, 82`). If Indeed returns 15 cards per page with `start` stepping by 10, pages overlap (dedup absorbs this, but it wastes page loads). Needs a check against live Indeed.
 4. **Selectors are not all in parse.py.** The `vjk=` and `/viewjob` URL markers and the composed card selector live in `scanner.py:159-174`, which goes against "all Indeed selectors in parse.py".

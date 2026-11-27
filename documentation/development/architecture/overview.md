@@ -73,7 +73,7 @@ Only Chrome talks to the internet. The LLM, the data and the config never leave 
 | `matcher/filters.py` | Rule-based pre-filter (experience, senior titles, blacklists) |
 | `matcher/company_type.py` | startup vs MNC: MNC list, then company size, then LLM |
 | `matcher/decide.py` | `Matcher`: filter, prompt, schema-constrained LLM call, post-checks (`min_score_to_apply`, `select_resume`), logs to `decisions.jsonl` |
-| `browser.py` | Headed persistent Chrome (`launch_persistent_context`, `channel="chrome"`), `human_pause`, `wait_for_human` |
+| `browser.py` | Headed persistent Chrome (`launch_persistent_context`, `channel="chrome"`), `human_pause`, `wait_for_human`; platform-neutral failure snapshots (`save_snapshot`: read-only PNG + HTML to `data/screenshots/`, retention); `PageLoadError` and `HumanActionTimeout` (carry the snapshot) |
 | `platforms/indeed/parse.py` | Pure parsing of Indeed pages. **All Indeed selectors and markers live here** |
 | `platforms/indeed/scanner.py` | `IndeedScanner`: searches, card clicks, description reading, pacing, challenge/sign-in waits |
 | `platforms/indeed/applier.py` | Planned: Easily-apply form filler, stops before Submit |

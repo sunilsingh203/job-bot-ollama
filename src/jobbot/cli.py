@@ -12,7 +12,13 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
-from jobbot.browser import BrowserError, HumanActionTimeout, open_browser, wait_for_human
+from jobbot.browser import (
+    BrowserError,
+    HumanActionTimeout,
+    PageLoadError,
+    open_browser,
+    wait_for_human,
+)
 from jobbot.config import (
     PROJECT_ROOT,
     ConfigError,
@@ -333,8 +339,11 @@ def scan(
             with open_browser(settings.browser) as (_, page):
                 scanner = IndeedScanner(page, store, settings, notify=_plain)
                 stats = scanner.run(searches, max_pages=pages)
-        except HumanActionTimeout as e:
-            console.print(f"[yellow]Scan stopped:[/] {escape(str(e))} (progress is saved)")
+        except (HumanActionTimeout, PageLoadError) as e:
+            stopped = str(e)
+            if e.snapshot is not None:
+                stopped = f"{stopped.rstrip('.')}. Screenshot: {e.snapshot.describe()}"
+            console.print(f"[yellow]Scan stopped:[/] {escape(stopped)} (progress is saved)")
         except BrowserError as e:
             _fail(str(e))
         except KeyboardInterrupt:
@@ -350,6 +359,17 @@ def scan(
             )
             if stats.stopped_early:
                 console.print(f"[yellow]Stopped early:[/] {stats.stopped_early}")
+            if stats.dom_fallback_pages:
+                snap = stats.dom_fallback_snapshot
+                shot = snap.describe() if snap is not None else "not saved"
+                console.print(
+                    f"[yellow]DOM fallback used on {stats.dom_fallback_pages} pages "
+                    f"(job JSON missing).[/] Screenshot: {escape(shot)}"
+                )
+            if stats.human_timeouts:
+                console.print(
+                    f"[yellow]Skipped after an unsolved check/sign-in:[/] {stats.human_timeouts}"
+                )
         if decide:
             _run_decide(store, settings, limit=None)
 

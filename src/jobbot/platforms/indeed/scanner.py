@@ -3,19 +3,34 @@
 Descriptions are read the way a person would: click a card on the results page and read the
 right-hand job pane. Pace is slow and randomised; Cloudflare checks and sign-in pages pause the
 scan until the user deals with them in the window.
+
+When something unexpected happens (page load error, no cards, DOM fallback, unreadable
+description, unsolved check) a failure snapshot (PNG + HTML) is saved to `data/screenshots/`.
+A page-load error stops the scan; the others skip the page or job and carry on. An unsolved
+check skips the item, but HUMAN_TIMEOUTS_IN_A_ROW_LIMIT of them in a row stop the scan.
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import Literal
 from urllib.parse import urlencode
 
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from jobbot.browser import Notify, human_pause, wait_for_human
+from jobbot.browser import (
+    SCREENSHOTS_DIRNAME,
+    HumanActionTimeout,
+    Notify,
+    PageLoadError,
+    Snapshot,
+    human_pause,
+    save_snapshot,
+    wait_for_human,
+)
 from jobbot.config import Search, Settings
 from jobbot.db import JobStore
 from jobbot.platforms.indeed import parse
@@ -24,6 +39,15 @@ from jobbot.text import html_to_text
 
 RESULTS_PER_PAGE_STEP = 10  # Indeed's `start` parameter step
 DESCRIPTION_TIMEOUT_S = 15
+
+# Failure snapshot reasons (file name slugs).
+REASON_GOTO_ERROR = "goto_error"
+REASON_NO_CARDS = "no_cards"
+REASON_DOM_FALLBACK = "dom_fallback"
+REASON_NO_DESCRIPTION = "no_description"
+REASON_HUMAN_TIMEOUT = "human_timeout"
+# Unsolved checks/sign-ins in a row (nothing got past a check in between) that stop the scan.
+HUMAN_TIMEOUTS_IN_A_ROW_LIMIT = 2
 
 
 @dataclass
@@ -37,6 +61,9 @@ class ScanStats:
     logged_in: bool | None = None
     per_search: dict[str, int] = field(default_factory=dict)  # search name -> new jobs
     stopped_early: str | None = None
+    dom_fallback_pages: int = 0  # results pages read from the DOM (job JSON missing)
+    dom_fallback_snapshot: Snapshot | None = None  # taken on the first one only
+    human_timeouts: int = 0  # pages/jobs skipped after an unsolved check or sign-in
 
 
 def search_url(base_url: str, search: Search, page_index: int) -> str:
@@ -56,11 +83,14 @@ class IndeedScanner:
         self.settings = settings
         self.notify = notify
         self.base_url = settings.scan.base_url.rstrip("/")
+        self.snapshot_dir = settings.data_dir / SCREENSHOTS_DIRNAME
+        self._stats = ScanStats()
+        self._timeouts_in_a_row = 0
 
     # ------------------------------------------------------------ public
 
     def run(self, searches: list[Search], max_pages: int | None = None) -> ScanStats:
-        stats = ScanStats()
+        stats = self._stats = ScanStats()
         for search in searches:
             stats.per_search[search.name] = 0
             pages = max_pages or search.max_pages
@@ -72,11 +102,12 @@ class IndeedScanner:
                     return stats
                 url = search_url(self.base_url, search, page_index)
                 self.notify(f"[{search.name}] page {page_index + 1}/{pages}")
-                result = self._load_results(url)
+                result = self._load_results(url, snapshot_if_empty=page_index == 0)
                 if result is None or not result.listings:
                     break
                 stats.pages += 1
                 stats.logged_in = result.logged_in
+                self._note_dom_fallback(result, stats)
                 new_on_page = self._process_page(result, search, url, stats)
                 stats.per_search[search.name] += new_on_page
                 if len(result.listings) < RESULTS_PER_PAGE_STEP:
@@ -86,15 +117,24 @@ class IndeedScanner:
 
     # ------------------------------------------------------------ pages
 
-    def _load_results(self, url: str) -> parse.SearchPage | None:
-        self.page.goto(url, wait_until="domcontentloaded")
-        self._handle_blockers()
+    def _load_results(
+        self, url: str, *, snapshot_if_empty: bool = False
+    ) -> parse.SearchPage | None:
+        try:
+            self.page.goto(url, wait_until="domcontentloaded")
+        except PlaywrightError as e:  # includes PlaywrightTimeout
+            raise PageLoadError(str(e), self._snapshot(REASON_GOTO_ERROR)) from e
+        if self._check_blockers("page") == "skipped":
+            return None
         try:
             self.page.wait_for_selector(SEL_CARD_LINK, timeout=20000)
         except PlaywrightTimeout:
-            self._handle_blockers()  # a check may have appeared late
+            if self._check_blockers("page") == "skipped":  # a check may have appeared late
+                return None
             if self.page.locator(SEL_CARD_LINK).count() == 0:
                 self.notify("  no results on this page")
+                if snapshot_if_empty:
+                    self._snapshot(REASON_NO_CARDS)
                 return None
         human_pause(1.0, 2.5)  # let the page settle like a person would
         return parse.parse_search_page(self.page.content(), self.base_url)
@@ -148,10 +188,17 @@ class IndeedScanner:
                 self.notify(f"  browser error reading {jk}: {str(e).splitlines()[0]}")
                 text = None
             if text:
+                self._timeouts_in_a_row = 0
                 return text
-            if attempt == 0 and self._handle_blockers():
-                # We had to wait for a check/sign-in; return to the results and retry once.
-                self._load_results(results_url)
+            if attempt == 0:
+                blockers = self._check_blockers("job")
+                if blockers == "skipped":
+                    return None  # the human_timeout snapshot is this job's only one
+                if blockers == "waited":
+                    # We had to wait for a check/sign-in; return to the results and retry once.
+                    if self._load_results(results_url, snapshot_if_empty=True) is None:
+                        return None  # the reload already reported (and snapshotted) why
+        self._snapshot(REASON_NO_DESCRIPTION, job_key=jk)
         return None
 
     def _click_and_read(self, jk: str) -> str | None:
@@ -219,4 +266,54 @@ class IndeedScanner:
             timeout,
             self.notify,
         )
+        self._timeouts_in_a_row = 0  # got past the checks (or there were none)
         return waited
+
+    def _check_blockers(
+        self, item: Literal["page", "job"]
+    ) -> Literal["clear", "waited", "skipped"]:
+        """`_handle_blockers`, but an unsolved check skips the item instead of stopping the scan.
+
+        Re-raises `HumanActionTimeout` when the run must stop (window closed, or the guard).
+        """
+        try:
+            waited = self._handle_blockers()
+        except HumanActionTimeout as e:
+            self._skip_after_human_timeout(e, item)
+            return "skipped"
+        return "waited" if waited else "clear"
+
+    def _skip_after_human_timeout(self, e: HumanActionTimeout, item: str) -> None:
+        snap = self._snapshot(REASON_HUMAN_TIMEOUT)
+        if snap.window_closed:
+            raise HumanActionTimeout(str(e), snapshot=snap) from e  # stop, as before
+        self._timeouts_in_a_row += 1
+        if self._timeouts_in_a_row >= HUMAN_TIMEOUTS_IN_A_ROW_LIMIT:
+            raise HumanActionTimeout(
+                f"{HUMAN_TIMEOUTS_IN_A_ROW_LIMIT} checks/sign-ins in a row were not solved; "
+                "stopping the scan to protect the Indeed account",
+                snapshot=snap,
+            ) from e
+        self._stats.human_timeouts += 1
+        timeout = self.settings.browser.human_wait_timeout_s
+        self.notify(f"  ! still blocked after {timeout:.0f}s - skipped this {item}")
+
+    # ------------------------------------------------------------ failure snapshots
+
+    def _snapshot(self, reason: str, job_key: str | None = None) -> Snapshot:
+        return save_snapshot(
+            self.page,
+            self.snapshot_dir,
+            reason,
+            job_key=job_key,
+            keep=self.settings.browser.screenshots_keep,
+            notify=self.notify,
+        )
+
+    def _note_dom_fallback(self, result: parse.SearchPage, stats: ScanStats) -> None:
+        if result.source != "dom":
+            return
+        stats.dom_fallback_pages += 1
+        if stats.dom_fallback_pages == 1:
+            self.notify("  job JSON missing - reading cards from the page (DOM fallback)")
+            stats.dom_fallback_snapshot = self._snapshot(REASON_DOM_FALLBACK)
