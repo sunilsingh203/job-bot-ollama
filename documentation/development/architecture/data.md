@@ -67,7 +67,7 @@ will be added by migrations when `review-dashboard` and `form-filler` are built.
 | `skipped` | `save_decision` | LLM skip, or apply downgraded (low score, no role track, no resume) |
 | `pending_review` | `save_decision` | Apply, Easily apply: waits for the user |
 | `manual` | `save_decision` | Apply, external apply: the user applies on the company site |
-| `failed` | `mark_failed` | Bad LLM output after one retry. `LLMUnavailable` does not mark jobs; the run stops |
+| `failed` | `mark_failed` | Bad LLM output (invalid JSON) after one retry. `LLMUnavailable`, including a timeout (`LLMTimeout`), does not mark jobs; the run stops |
 | `approved` / `rejected` | dashboard (planned) | The user's review |
 | `filling` / `ready_to_submit` | form filler (planned) | Bot fills, stops before Submit |
 | `applied` | form filler (planned) | Confirmation page detected after the user clicked Submit |

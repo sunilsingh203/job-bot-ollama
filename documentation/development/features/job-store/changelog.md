@@ -1,5 +1,11 @@
 # Changelog: job-store
 
+## 2026-11-27: Ollama timeouts stop the decide run. See changes/llm-timeout-stops-run/.
+- An Ollama timeout (connect, read, write or pool, on any attempt) now raises `LLMTimeout`, a subclass of `LLMUnavailable`, so `decide_pending` stops on the first timeout with no retry. The current and remaining jobs stay `new`; previously each timed-out job became `failed` and the run went on.
+- The stop message names the model and `llm.timeout_s` and suggests a smaller model (`jobbot --model`) or a larger `llm.timeout_s`. A stopped run still exits 0.
+- Invalid JSON after the retry still marks only that job `failed`. No schema, status or config change; `llm.timeout_s` stays 600.
+- Spec: BR-9, BR-10, T-8, T-10, §9, AC-10, AC-11, AC-17 updated; open question 2 resolved. Tests: `tests/test_db_pipeline.py` (2 new), `tests/test_cli_llm_errors.py` (new).
+
 ## 2026-11-26: Schema moved to SQL migration files. See changes/sql-migrations/.
 - The `jobs` table DDL moved from the `_SCHEMA` string in `src/jobbot/db.py` to `src/jobbot/migrations/0001_init.sql`, applied by `PRAGMA user_version` (same columns, unique key and indexes). From now on the migration files are the only record of the schema (ADR-0003).
 

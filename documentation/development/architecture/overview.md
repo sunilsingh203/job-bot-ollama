@@ -64,8 +64,8 @@ Only Chrome talks to the internet. The LLM, the data and the config never leave 
 | `text.py` | Text normalisation, HTML to text |
 | `db.py` | `JobStore` over SQLite: upsert listings, store descriptions (duplicate detection), save decisions, mark/reset failed, queries. Applies migrations from `migrations/` via `PRAGMA user_version` |
 | `migrations/` | `NNNN_name.sql` schema files, shipped with the package ([ADR-0003](../decisions/ADR-0003-sql-migration-files.md)) |
-| `pipeline.py` | `decide_pending`: runs the matcher over `new` jobs. `LLMUnavailable` stops the run; `LLMError` marks one job `failed` |
-| `llm/client.py` | `OllamaClient.chat_json`: JSON-schema structured output, pydantic validation, one retry, `LLMError` / `LLMUnavailable` |
+| `pipeline.py` | `decide_pending`: runs the matcher over `new` jobs. `LLMUnavailable` (including a timeout, `LLMTimeout`) stops the run; any other `LLMError` (invalid JSON) marks one job `failed` |
+| `llm/client.py` | `OllamaClient.chat_json`: JSON-schema structured output, pydantic validation, one retry, `LLMError` (invalid JSON) / `LLMUnavailable` (Ollama down, HTTP error) / `LLMTimeout` (an `LLMUnavailable`: any timeout, no retry) |
 | `llm/prompts.py` | All prompt templates, with version constants (`RESUME_PROFILE_PROMPT_VERSION`, `DECIDE_PROMPT_VERSION`) |
 | `resumes/library.py` | Loads `resumes/resumes.yaml` (role tracks, resume entries) |
 | `resumes/parser.py` | PDF/DOCX/TXT to text |

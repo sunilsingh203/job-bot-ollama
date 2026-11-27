@@ -48,7 +48,7 @@ Entry format:
 - **How to avoid:** write docs from the code as it is, not from the plan. Label anything not built
   yet "(planned)". In a review, check every documented claim against the code with a grep.
 - **Evidence:** as-built review, 2026-11-26 (`features/*/specification.md`, Open questions).
-- **Seen:** 1× (last 2026-11-26) · **Clean streak:** 1/3 (2026-11-27: three change definitions described current behaviour from the code)
+- **Seen:** 1× (last 2026-11-26) · **Clean streak:** 2/3 (2026-11-27: three change definitions described current behaviour from the code; 2026-11-27: llm-timeout-stops-run docs updated from the code and checked with a grep, including 3 stale as-built plan lines the plan had missed)
 
 ## M-002: Code paths shipped without tests
 - **Mistake:** 36 acceptance criteria across the 3 built capabilities have no automated test, for example:
@@ -59,7 +59,7 @@ Entry format:
 - **How to avoid:** every new branch, CLI flag or error path gets a test in the same change. Use
   a fake LLM client or page object instead of skipping the test. The implementation plan maps each AC to a test.
 - **Evidence:** AC tables in `features/{resume-matcher,indeed-scanner,job-store}/specification.md`.
-- **Seen:** 1× (last 2026-11-26) · **Clean streak:** 0/3
+- **Seen:** 1× (last 2026-11-26) · **Clean streak:** 1/3 (2026-11-27: llm-timeout-stops-run tested every new error path with a fake client, `tests/conftest.py`)
 
 ## M-003: Error type picked without thinking about the effect on the whole run
 - **Mistake:** an Ollama timeout raises `LLMError` (per-job), not `LLMUnavailable` (stop the run).
@@ -67,8 +67,10 @@ Entry format:
 - **Why it matters:** a decide run wastes hours, and every job has to be re-queued.
 - **How to avoid:** for each exception, decide whether it should stop the run or skip one item,
   write that choice down in the spec, and test both cases.
-- **Evidence:** `src/jobbot/llm/client.py`; resume-matcher OQ-3; job-store Open questions.
-- **Seen:** 1× (last 2026-11-26) · **Clean streak:** 0/3
+- **Evidence:** `src/jobbot/llm/client.py`; resume-matcher OQ-3; job-store Open questions. The
+  timeout case was fixed on 2026-11-27 (`LLMTimeout`) and is guarded by `tests/test_llm_client.py`
+  and `tests/test_db_pipeline.py::test_decide_pending_stops_on_timeout`; new exception types are not.
+- **Seen:** 1× (last 2026-11-26) · **Clean streak:** 1/3 (2026-11-27: llm-timeout-stops-run chose each error type by its effect on the run, wrote it in the specs, tested both sides)
 
 ## M-004: Hard-coded numbers and counters that disagree with config or docs
 - **Mistake:**

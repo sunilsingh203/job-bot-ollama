@@ -7,7 +7,7 @@ Status: As-built — documented retroactively on 2026-11-26 from the existing co
 - Code: `src/jobbot/` (initial commit `c3677ba`)
 - Related: `implementation-plan.md`, `changelog.md` in this folder; ADR-0001-local-only-llm in `documentation/development/decisions/`
 
-This document describes what the code **currently does**. Where the code differs from `CLAUDE.md`, or looks unclear or risky, the point is listed under [Open questions & assumptions](#open-questions--assumptions). Nothing here changes the code.
+This document describes what the code **currently does**. Where the code differs from `CLAUDE.md`, or looks unclear or risky, the point is listed under [Open questions & assumptions](#open-questions--assumptions). Nothing here changes the code. Rows changed by job-store `changes/llm-timeout-stops-run/` (2026-11-27: the LLM client timeout contract, §10, AC-27..AC-29, OQ-3) reference `llm/client.py` after that change.
 
 ---
 
@@ -233,7 +233,7 @@ The matcher is stateless per job: one call to `Matcher.decide(job)` gives exactl
 | LLM apply | `apply` | `llm` | Yes | a valid library id |
 | Error | (none; an exception is raised) | n/a | maybe | n/a |
 
-For reference only (owned by Step 2, `db.status_for`, `db.py:130-135`): `stage=filter` maps to `filtered_out`, `skip` to `skipped`, `apply` with Easily-apply to `pending_review`, other `apply` to `manual`. An `LLMError` maps to `failed`, and `LLMUnavailable` stops the run.
+For reference only (owned by Step 2, `db.status_for`, `db.py:130-135`): `stage=filter` maps to `filtered_out`, `skip` to `skipped`, `apply` with Easily-apply to `pending_review`, other `apply` to `manual`. An `LLMError` (invalid JSON after the retry) maps to `failed`, and `LLMUnavailable`, including a timeout (`LLMTimeout`), stops the run.
 
 ## 8. Permissions & data scope
 
@@ -258,9 +258,10 @@ For reference only (owned by Step 2, `db.status_for`, `db.py:130-135`): `stage=f
 
 | Error | Raised by | Meaning | Caller behaviour |
 |---|---|---|---|
-| `LLMUnavailable` (subclass of `LLMError`) | `client._post`: `httpx.ConnectError`, or any HTTP status other than 200 (after the `think` fallback) (`client.py:101-112`) | Ollama down, model missing, model cannot load (e.g. OOM returned as an HTTP error) | CLI prints `Error:` and exits 1. Step 2 `decide_pending` **stops the run**. |
-| `LLMError` | `chat_json` after 2 invalid outputs; `httpx.TimeoutException` (`client.py:95, 105-106`) | One bad answer, or a timeout for one call | CLI prints `Error:` and exits 1 (in `eval`, this aborts the whole eval). Step 2 marks just that job `failed`. |
-| HTTP 400 mentioning "thinking" with `think` set | `client._post` (`client.py:107-110`) | Model has no thinking mode | Retried once automatically without `think`; not surfaced |
+| `LLMUnavailable` (subclass of `LLMError`) | `client._post`: `httpx.ConnectError`, or any HTTP status other than 200 (after the `think` fallback) (`client.py:112-115, 129-130`) | Ollama down, model missing, model cannot load (e.g. OOM returned as an HTTP error) | CLI prints `Error:` and exits 1. Step 2 `decide_pending` **stops the run**. |
+| `LLMTimeout` (subclass of `LLMUnavailable`) | `client._post`: any `httpx.TimeoutException` (connect, read, write, pool) on any attempt, including the retry after invalid JSON and the no-`think` retry; no retry after a timeout (`client.py:116-124`) | The model is stuck, still loading or too slow for `llm.timeout_s`. Message: `Ollama timed out after <timeout_s>s (model <model>). ...` plus a hint (smaller model via `jobbot --model`, or a larger `llm.timeout_s`) | As `LLMUnavailable`: CLI prints `Error:` and exits 1; Step 2 `decide_pending` **stops the run** on the first timeout (changed 2026-11-27, changes/llm-timeout-stops-run in job-store). |
+| `LLMError` (not an `LLMUnavailable`) | `chat_json` after 2 invalid outputs (`client.py:106`) | One bad answer | CLI prints `Error:` and exits 1 (in `eval`, this aborts the whole eval). Step 2 marks just that job `failed`. |
+| HTTP 400 mentioning "thinking" with `think` set | `client._post` (`client.py:125-128`) | Model has no thinking mode | Retried once automatically without `think`; not surfaced |
 | `ConfigError` | config/library loaders | Missing or invalid config file | CLI prints the message and exits 1 |
 | `ValueError` | parser (unsupported format), `Matcher.__init__` (missing profiles) | | Caught by `match`/`eval` (`Error:`). In `resumes index` an unsupported format is **not** caught, so a traceback is shown (OQ-12). |
 | Unknown `resume_id` from the LLM | n/a (handled) | LLM named a resume outside the preferred set, or `none` | `select_resume` replaces it with the first preferred resume and adds a note; if no candidate is valid, the result is skip |
@@ -339,12 +340,12 @@ Reference profile for the examples: `total_experience_years = 0.8`, default `mat
 
 **LLM client**
 
-- **AC-27** If the model's content fails pydantic validation, the client retries once with temperature at least 0.3. If the second answer is also invalid, it raises `LLMError`. A valid answer returns the parsed model plus `LLMCallInfo` (model, latency, attempts, token counts).
-  Gap: no automated test
-- **AC-28** A connection failure or a non-200 HTTP status raises `LLMUnavailable`. A request timeout raises a plain `LLMError`.
-  Gap: no automated test of the client. The consumer side (stop on `LLMUnavailable`, mark `failed` on `LLMError`) is verified by tests/test_db_pipeline.py::test_decide_pending_aborts_when_llm_unavailable and ::test_decide_pending_sets_statuses (Step 2).
+- **AC-27** If the model's content fails pydantic validation, the client retries once with temperature at least 0.3. If the second answer is also invalid, it raises `LLMError` (not an `LLMUnavailable`). A valid answer returns the parsed model plus `LLMCallInfo` (model, latency, attempts, token counts).
+  Partly verified by: tests/test_llm_client.py::test_invalid_json_twice_is_per_job_error, ::test_valid_answer_returns_parsed_model. Gap: the retry temperature (at least 0.3) is not asserted.
+- **AC-28** A connection failure or a non-200 HTTP status raises `LLMUnavailable`. A request timeout of any kind (connect, read, write, pool), on any attempt, raises `LLMTimeout`, a subclass of `LLMUnavailable`, with no retry; its message names the model and `timeout_s` and suggests a smaller model (`--model`) or a larger `llm.timeout_s`. Changed 2026-11-27 (job-store changes/llm-timeout-stops-run): a timeout used to raise a plain `LLMError`.
+  Verified by: tests/test_llm_client.py::test_timeout_raises_llm_timeout (all four timeout types), ::test_timeout_on_second_attempt_after_invalid_json, ::test_timeout_on_no_think_retry, ::test_connect_error_is_unavailable, ::test_non_200_is_unavailable. Consumer side (Step 2): tests/test_db_pipeline.py::test_decide_pending_stops_on_timeout, ::test_decide_pending_aborts_when_llm_unavailable, ::test_decide_pending_sets_statuses; CLI: tests/test_cli_llm_errors.py.
 - **AC-29** An HTTP 400 whose body mentions "thinking", when `think` was sent, is retried once without the `think` option.
-  Gap: no automated test
+  Partly verified by: tests/test_llm_client.py::test_timeout_on_no_think_retry (the second request has no `think`). Gap: a successful answer after the no-`think` retry is not tested.
 - **AC-30** `jobbot --model X <cmd>` makes that command use model `X` instead of `llm.model`.
   Gap: no automated test
 
@@ -369,7 +370,7 @@ These are recorded as found and have **not** been fixed in code.
 
 - **OQ-1 Filters listed in CLAUDE.md that are not implemented.** CLAUDE.md's Filter step lists "already applied" and "wrong location". `filters.py` implements neither: `profile.preferred_locations` is loaded but never used, and the job location only reaches the LLM prompt. Assumption: "already applied" belongs to the job store (Step 2, dedup by job key), and location is left to the LLM. Confirm.
 - **OQ-2 Company-size step not fed in practice.** CLAUDE.md says company size comes "from Indeed's company page", but nothing in `platforms/indeed/` sets `Job.company_size`. Only `jobbot match --company-size` or fixture files supply it. For scanned jobs, resolution effectively goes MNC list → LLM.
-- **OQ-3 Timeouts are per-job failures.** `httpx.TimeoutException` raises plain `LLMError`, not `LLMUnavailable`. If the model is too slow for `timeout_s` (600 s), every job waits 10 minutes and is marked `failed` instead of the run stopping. Is that intended?
+- ~~**OQ-3 Timeouts are per-job failures.**~~ **Resolved 2026-11-27** by job-store changes/llm-timeout-stops-run: `httpx.TimeoutException` now raises `LLMTimeout` (an `LLMUnavailable`), so a decide run stops on the first timeout. `timeout_s` keeps its 600 s default. `resumes index` keeps stopping on the first timeout (now with the hint); the lost partial progress stays OQ-9.
 - **OQ-4 Enums only enforced by Ollama's grammar.** `LLMDecision.role_track`/`resume_id` are `str` in pydantic, so a model or server that ignores `format` could return an out-of-enum track. Combined with BR-5 step 2 (a track with no candidates keeps any valid LLM resume), a job in a track with no resume, or in an unknown track, can still end as `apply`. This behaviour is pinned by `test_unknown_track_keeps_valid_llm_choice`. Is it desired, or should an unknown or empty track force skip?
 - **OQ-5 `none` is not reserved.** Nothing stops a resume id or role track named `none`, which would collide with the sentinel value.
 - **OQ-6 Eval fixtures are tied to the private library.** The fixtures expect resume ids `software_dev` / `devops_cloud` (the user's current library), while `resumes.example.yaml` uses `sde_startup` / `sde_mnc`. Fixtures 03/09 also assume profile experience below 4 years. `jobbot eval` results therefore depend on gitignored personal config and aren't reproducible from the repo alone.

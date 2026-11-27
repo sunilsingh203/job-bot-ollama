@@ -19,7 +19,7 @@ class DecideStats:
     decided: int = 0
     failed: int = 0
     by_status: Counter[str] = field(default_factory=Counter)
-    aborted: str | None = None  # set when the LLM became unavailable
+    aborted: str | None = None  # set when the LLM became unavailable or timed out
 
 
 def decide_pending(
@@ -31,8 +31,9 @@ def decide_pending(
 ) -> DecideStats:
     """Run the matcher on every job with status 'new' that has a description.
 
-    A bad answer for one job marks only that job 'failed'. If Ollama itself is unavailable the
-    run stops, leaving the remaining jobs 'new' for next time.
+    A bad answer for one job (invalid JSON after the retry) marks only that job 'failed'. If
+    Ollama is unavailable or a call times out (`LLMTimeout`, an `LLMUnavailable`), the run stops,
+    leaving the current and remaining jobs 'new' for next time.
     """
     stats = DecideStats()
     rows = store.to_decide(limit)

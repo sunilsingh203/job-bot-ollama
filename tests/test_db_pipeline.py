@@ -123,6 +123,39 @@ def test_decide_pending_aborts_when_llm_unavailable(store):
     assert store.counts() == {"new": 2}  # untouched, will be retried next run
 
 
+def test_decide_pending_stops_on_timeout(store, timeout_error):
+    _seed(store, ["a", "b", "c"])
+    apply = Decision(decision="apply", stage="llm", reason="good", resume_id="r1", score=80)
+    matcher = FakeMatcher({"a": apply, "b": timeout_error, "c": apply})
+    reported = []
+    stats = decide_pending(
+        store, matcher, on_decision=lambda i, n, job, d, s: reported.append(job.job_key)
+    )
+    assert matcher.calls == ["a", "b"]  # stopped at the first timeout, no retry
+    assert stats.decided == 1 and stats.failed == 0
+    assert stats.aborted == str(timeout_error)
+    assert reported == ["a"]  # no "failed" report for the timed-out job
+
+    # The stop touches no job: a keeps its decision, b and c stay new for the next run.
+    assert store.counts() == {"pending_review": 1, "new": 2}
+    for jk in ("b", "c"):
+        row = store.get_by_key("indeed", jk)
+        assert row["error"] is None and row["decision"] is None and row["decided_at"] is None
+    assert [r["job_key"] for r in store.to_decide()] == ["b", "c"]
+
+
+def test_decide_pending_marks_failed_on_client_invalid_json(store, invalid_json_error):
+    _seed(store, ["a", "b", "c"])
+    apply = Decision(decision="apply", stage="llm", reason="good", resume_id="r1", score=80)
+    matcher = FakeMatcher({"a": apply, "b": invalid_json_error, "c": apply})
+    stats = decide_pending(store, matcher)
+    assert matcher.calls == ["a", "b", "c"]  # the run continued after the per-job error
+    assert stats.decided == 2 and stats.failed == 1 and stats.aborted is None
+    assert store.counts() == {"pending_review": 2, "failed": 1}
+    b = store.get_by_key("indeed", "b")
+    assert b["status"] == "failed" and b["error"] == str(invalid_json_error)[:1000]
+
+
 def test_jobs_without_description_are_not_decided(store):
     store.upsert_listing(listing("a"), snippet=None, search_name="x")
     assert store.to_decide() == []

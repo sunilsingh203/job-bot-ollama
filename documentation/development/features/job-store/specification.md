@@ -9,7 +9,9 @@ with its latest decision), the job status lifecycle, and the "decide over the DB
 All file:line references are to commit `c3677ba`. From the change
 [`changes/sql-migrations/`](changes/sql-migrations/) on, the schema DDL lives in
 `src/jobbot/migrations/0001_init.sql` (applied by `PRAGMA user_version`) instead of the
-`_SCHEMA` string in `src/jobbot/db.py`. The columns are the same.
+`_SCHEMA` string in `src/jobbot/db.py`. The columns are the same. Rows changed by
+[`changes/llm-timeout-stops-run/`](changes/llm-timeout-stops-run/) (2026-11-27: BR-9, BR-10,
+T-8, T-10, §9, AC-10, AC-11, AC-17) reference the code after that change.
 
 ---
 
@@ -29,7 +31,7 @@ and resume (for example when Ollama is down or runs out of memory).
 | Developer / operator (single local user) | Runs `jobbot decide [--limit N] [--retry-failed]`, `jobbot jobs [--status S] [--limit N]`, `jobbot show ID`, `jobbot scan --decide`. Will approve or reject jobs in the planned dashboard. |
 | The bot: scanner (`indeed-scanner`) | Inserts and refreshes listings, and stores descriptions. |
 | The bot: pipeline (`decide_pending`) | Picks `new` jobs, calls the matcher, and stores decisions or failures. |
-| Local LLM (Ollama, via the resume-matcher `Matcher`) | Produces apply/skip decisions. It can be unavailable (raises `LLMUnavailable`) or return a bad answer for one job (raises `LLMError`). |
+| Local LLM (Ollama, via the resume-matcher `Matcher`) | Produces apply/skip decisions. It can be unavailable or time out (raises `LLMUnavailable`; a timeout is its subclass `LLMTimeout`) or return a bad answer for one job (raises `LLMError`). |
 | Indeed + Cloudflare | Indirect only: the source of the data written by the scanner. The job store makes no network calls. |
 
 ## 3. Scope
@@ -61,8 +63,8 @@ Out of scope:
 | BR-6 | `status_for(decision, easy_apply)`: `stage == "filter"` -> `filtered_out`; else `decision == "skip"` -> `skipped`; else (`apply`) `pending_review` if `easy_apply` is true, otherwise `manual` (including `easy_apply` NULL/unknown). | `db.py:63-68` |
 | BR-7 | Saving a decision sets `status`, `decision`, `resume_id`, `score`, `reason`, `decision_json` (the full `Decision`, including `role_track`, `company_type`, `notes`, `model`, `prompt_version`, `latency_s`), clears `error`, and sets `decided_at` and `updated_at`. | `db.py:153-176` |
 | BR-8 | Jobs are decided one at a time, sequentially (no parallel LLM calls). | `pipeline.py:39-58` |
-| BR-9 | If the LLM is unavailable (`LLMUnavailable`: Ollama unreachable, or a non-200 HTTP response such as an out-of-memory error), the run **stops immediately**. The current and all remaining jobs stay `new` and are picked up by the next run. | `pipeline.py:43-45`, `llm/client.py:100-112` |
-| BR-10 | A per-job `LLMError` (invalid JSON after 2 attempts, or an Ollama **timeout**) marks only that job `failed` (with the error text truncated to 1,000 chars) and the run continues. | `pipeline.py:46-52`, `db.py:178-183`, `llm/client.py:95, 105-106` |
+| BR-9 | If the LLM is unavailable or a call **times out** (`LLMUnavailable`: Ollama unreachable, a non-200 HTTP response such as an out-of-memory error, or an httpx timeout of any kind (connect, read, write, pool) on any attempt of the call, raised as its subclass `LLMTimeout`), the run **stops immediately**. There is **no retry** after a timeout. The current and all remaining jobs stay `new` (no row is written for the current job) and are picked up by the next run. The timeout message names the model, the configured `llm.timeout_s` and a hint (a smaller model via `jobbot --model`, or a larger `llm.timeout_s`). Changed 2026-11-27 (changes/llm-timeout-stops-run): timeouts used to be per-job failures. | `pipeline.py:44-46`, `llm/client.py:108-131` (`LLMTimeout`: 116-124) |
+| BR-10 | A per-job `LLMError` that is not an `LLMUnavailable` (today: invalid JSON after 2 attempts) marks only that job `failed` (with the error text truncated to 1,000 chars) and the run continues. Timeouts are not in this group (BR-9). | `pipeline.py:47-53`, `db.py:178-183`, `llm/client.py:106` |
 | BR-11 | `--retry-failed` puts **all** `failed` jobs back to `new` (clearing `error`) before deciding. | `db.py:185-192`, `cli.py:365-366` |
 | BR-12 | Every write commits immediately (autocommit per operation), so an interrupted run keeps everything done so far. | `db.py` |
 | BR-13 | The store never deletes rows. | `db.py` |
@@ -126,9 +128,9 @@ not implemented).
 | T-5 | `new` | `skipped` | `save_decision`, LLM `skip` | Yes | same |
 | T-6 | `new` | `pending_review` | `save_decision`, `apply` + `easy_apply` true | Yes | same |
 | T-7 | `new` | `manual` | `save_decision`, `apply` + `easy_apply` false/unknown | Yes | same |
-| T-8 | `new` | `failed` | `mark_failed` after a per-job `LLMError` | Yes | `pipeline.py:46-52` |
+| T-8 | `new` | `failed` | `mark_failed` after a per-job `LLMError` that is not an `LLMUnavailable` (invalid JSON after the retry; not a timeout) | Yes | `pipeline.py:47-53` |
 | T-9 | `failed` | `new` | `reset_failed` (`jobbot decide --retry-failed`) | Yes | `db.py:185-192` |
-| T-10 | `new` | `new` | `LLMUnavailable`: run aborted, job untouched | Yes | `pipeline.py:43-45` |
+| T-10 | `new` | `new` | `LLMUnavailable`, including a timeout (`LLMTimeout`): run aborted, job untouched | Yes | `pipeline.py:44-46` |
 | T-11 | any | same | `upsert_listing` of an existing job | Yes | `db.py:100-108` |
 | T-12 | `pending_review` | `approved` / `rejected` | User review in the dashboard | **Planned** (Step 3) | — |
 | T-13 | `approved` | `filling` -> `ready_to_submit` | Form filler fills and stops before Submit | **Planned** (Step 4) | — |
@@ -163,9 +165,10 @@ regardless of the previous status). The transitions above hold because of how ca
 
 | Case | Behaviour | Where |
 |---|---|---|
-| Ollama unreachable / HTTP error (e.g. OOM at model load) during `decide` | Run stops; summary prints `Decided N (...)` then `Stopped - LLM unavailable: <msg>`; the remaining jobs stay `new`. | `pipeline.py:43-45`, `cli.py:394-397` |
-| LLM unavailable while building resume profiles (before any job) | `_build_matcher` raises `LLMUnavailable` (an `LLMError`) -> `Error: ...` exit 1; no job is touched. | `cli.py:388-393` |
-| Bad JSON from the model (after 1 retry) or an Ollama timeout for one job | That job becomes `failed` with the error; the CLI prints `[i/n] title @ company -> failed: <err>`; the run continues. | `pipeline.py:46-52`, `cli.py:379-381` |
+| Ollama unreachable / HTTP error (e.g. OOM at model load) during `decide` | Run stops; summary prints `Decided N (...)` then `Stopped - LLM unavailable: <msg>`; the remaining jobs stay `new`. | `pipeline.py:44-46`, `cli.py:394-397` |
+| Ollama timeout while deciding job *i* (any attempt, including the retry after invalid JSON and the no-`think` retry) | Run stops at once, with no retry. Job *i* and later jobs stay `new` (error, decision and `decided_at` NULL); jobs 1..*i-1* keep their results. The CLI prints no `-> failed` line for job *i*, then `Decided N (...)` and `Stopped - LLM unavailable: Ollama timed out after <timeout_s>s (model <model>). ...` with the hint (smaller model via `jobbot --model`, or a larger `llm.timeout_s`). Exit code 0, as for any stopped run. | `llm/client.py:116-124`, `pipeline.py:44-46`, `cli.py:394-397` |
+| LLM unavailable or timed out while building resume profiles (before any job) | `_build_matcher` raises `LLMUnavailable` / `LLMTimeout` (both `LLMError`s) -> `Error: ...` exit 1 (a timeout message carries the hint); no job is touched. | `cli.py:388-393` |
+| Bad JSON from the model (after 1 retry) for one job | That job becomes `failed` with the error; the CLI prints `[i/n] title @ company -> failed: <err>`; the run continues. | `pipeline.py:47-53`, `cli.py:379-381` |
 | Other exceptions from the matcher (`ValueError`, incl. pydantic `ValidationError`, `ConfigError`) | Not caught by `decide_pending`; the CLI prints `Error: ...` exit 1. Jobs decided earlier stay saved; the current job stays `new`. | `cli.py:392-393` |
 | No jobs to decide | `No new jobs to decide.`; the LLM is never contacted. | `cli.py:371-374` |
 | `jobbot jobs` on an empty DB | `Database is empty. Run \`jobbot scan\` first.` | `cli.py:410-412` |
@@ -202,11 +205,11 @@ Verified by: tests/test_db_pipeline.py::test_status_for
 **AC-9: Save decision.** `save_decision` stores status (via `status_for`), `decision`, `resume_id`, `score`, `reason`, `decision_json`, sets `decided_at`, clears `error`, and returns the status; an unknown id raises `KeyError`.
 Verified by: tests/test_db_pipeline.py::test_decide_pending_sets_statuses (status, `resume_id`, `score`). Gap: `decision_json`, `decided_at`, error clearing and `KeyError` are not asserted.
 
-**AC-10: Per-job failure.** In `decide_pending`, a job whose matcher call raises `LLMError` is marked `failed` (error text stored), counted in `stats.failed` and `by_status["failed"]`, reported to `on_decision` with `decision=None`, and the loop continues with the next job.
-Verified by: tests/test_db_pipeline.py::test_decide_pending_sets_statuses
+**AC-10: Per-job failure.** In `decide_pending`, a job whose matcher call raises an `LLMError` that is not an `LLMUnavailable` (invalid JSON after the retry; not a timeout) is marked `failed` (error text stored), counted in `stats.failed` and `by_status["failed"]`, reported to `on_decision` with `decision=None`, and the loop continues with the next job.
+Verified by: tests/test_db_pipeline.py::test_decide_pending_sets_statuses, tests/test_db_pipeline.py::test_decide_pending_marks_failed_on_client_invalid_json (the real client error)
 
-**AC-11: Abort on LLM unavailable.** When the matcher raises `LLMUnavailable`, `decide_pending` stops at once (no further matcher calls), sets `stats.aborted` to the message, and leaves that job and all remaining jobs `new`.
-Verified by: tests/test_db_pipeline.py::test_decide_pending_aborts_when_llm_unavailable
+**AC-11: Abort on LLM unavailable or timeout.** When the matcher raises `LLMUnavailable`, including a timeout (`LLMTimeout`), `decide_pending` stops at once (no further matcher calls, no retry), sets `stats.aborted` to the message, does not report the job to `on_decision`, and leaves that job and all remaining jobs `new` (error, decision and `decided_at` NULL), in the same `to_decide()` order for the next run. Jobs decided earlier keep their results. `jobbot decide` then prints `Decided N (...)` and a `Stopped` line with the timeout message and hint, prints no `-> failed` line, and exits 0. A timeout while building resume profiles prints `Error: <message>` and exits 1 with no job touched.
+Verified by: tests/test_db_pipeline.py::test_decide_pending_aborts_when_llm_unavailable, tests/test_db_pipeline.py::test_decide_pending_stops_on_timeout, tests/test_cli_llm_errors.py::test_decide_stops_on_timeout_with_hint, tests/test_cli_llm_errors.py::test_decide_timeout_while_profiling_exits_1. `jobbot scan --decide` uses the same `_run_decide` (`cli.py:353-354`); checked by inspection (no browser in tests).
 
 **AC-12: Retry failed.** `reset_failed()` sets every `failed` job back to `new` with `error` NULL and returns how many it reset; those jobs are then in `to_decide()`. `jobbot decide --retry-failed` prints `Re-queued N failed jobs.` before deciding.
 Verified by: tests/test_db_pipeline.py::test_decide_pending_sets_statuses (store level). Gap: the CLI flag has no automated test.
@@ -224,7 +227,7 @@ Verified by: tests/test_db_pipeline.py::test_row_to_job_roundtrip
 Gap: no automated test (manual: run `jobbot decide` with Ollama stopped on a fully decided DB).
 
 **AC-17: Decide CLI output.** For each job `jobbot decide` prints `[i/n] title @ company -> <status> | score | resume_id` and the reason (or `-> failed: <error>`), then `Decided N (status: count, ...)`, plus `Stopped - LLM unavailable: ...` when aborted.
-Gap: no automated test (manual run).
+Partly verified by: tests/test_cli_llm_errors.py::test_decide_stops_on_timeout_with_hint (the `-> <status>` line, `Decided N (...)` and the `Stopped` line). Gap: the reason line and the `-> failed: <error>` line have no automated test.
 
 **AC-18: Jobs listing.** `jobbot jobs [--status S] [--limit N=30]` prints the status counts and a table (id, status, score, resume, easy, title, company, location). With `--status`, rows are ordered by score (highest first), then most recently updated; without it, by most recently updated. An empty DB prints the "Database is empty" hint.
 Gap: no automated test (`list_jobs`/`counts` are only exercised indirectly through `counts()` in tests/test_db_pipeline.py).
@@ -236,7 +239,7 @@ Gap: no automated test (manual run).
 
 Inconsistencies with CLAUDE.md / docs:
 1. **Prompt version is not a column.** CLAUDE.md says to "store the prompt version with each decision in the DB, so prompt changes can be compared". It is stored only inside `decision_json` (as `model`, `prompt_version`, `latency_s`), so comparing needs `json_extract`. Decide whether to promote these to columns (it would need a migration).
-2. **Timeouts count as per-job failures.** CLAUDE.md lists `LLMUnavailable` as "Ollama down / OOM / HTTP error". An Ollama **timeout** is raised as a plain `LLMError` (`llm/client.py:105-106`), so with a slow or stuck model every job can time out one by one (each waiting `llm.timeout_s`, default 600 s) and become `failed` instead of the run aborting. Confirm this is intended.
+2. ~~**Timeouts count as per-job failures.**~~ **Resolved 2026-11-27** by changes/llm-timeout-stops-run: an Ollama timeout now raises `LLMTimeout` (an `LLMUnavailable`) and stops the run on the first timeout (BR-9, T-10, AC-11). `llm.timeout_s` keeps its 600 s default. Jobs that became `failed` through a timeout in earlier runs stay `failed` until `jobbot decide --retry-failed`. A job that always times out would stop every run at the same place; this risk was accepted by the developer (revisit only if seen).
 3. **"Already applied" filter.** The CLAUDE.md pipeline lists "already applied" as a rule filter, but there is no `applied` status yet and the filters don't query the DB. This depends on Step 4.
 4. **Duplicate semantics.** A duplicate is any other row with an identical description hash, whatever its status or platform. Effects: (a) the same posting relisted under a new job key is never decided again, even when the original was `failed` or `filtered_out` for a reason that no longer applies; (b) the same JD for several locations keeps only the first location; (c) `reset_failed` does not re-check duplicates. Confirm.
 5. **No transition guards and no CHECK constraint on `status`.** Invalid states are possible through direct calls (e.g. `set_description` on a decided job would reset it to `new`). Planned statuses will need guards (e.g. only `pending_review` -> `approved`), especially for the approve-before-submit flow.
@@ -259,7 +262,7 @@ Assumptions:
 | Depends on | Why |
 |---|---|
 | resume-matcher (`src/jobbot/matcher/decide.py` `Matcher`, filters, company type, resume selection) | `decide_pending` calls `Matcher.decide(job)` for every queued job; `_build_matcher` in the CLI loads settings, `profile.yaml`, the resume library, cached profiles and the MNC list. |
-| LLM client (`src/jobbot/llm/client.py`) | The `LLMError` / `LLMUnavailable` exception contract drives the failure/abort semantics. |
+| LLM client (`src/jobbot/llm/client.py`) | The `LLMError` / `LLMUnavailable` / `LLMTimeout` exception contract drives the failure/abort semantics (`LLMTimeout` is an `LLMUnavailable`, so a timeout stops the run). |
 | `src/jobbot/models.py` | `Job`, `Decision`, `description_sha256`. |
 | Config | `settings.data_dir` (DB location), `settings.llm.model` (printed). |
 | SQLite (Python standard-library `sqlite3`) | Storage. |

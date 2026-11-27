@@ -19,8 +19,14 @@ class LLMError(RuntimeError):
 
 
 class LLMUnavailable(LLMError):
-    """Ollama is down, the model is missing, or it cannot load (e.g. out of memory).
-    Retrying other jobs is pointless; callers should stop."""
+    """Ollama is down, the model is missing, it cannot load (e.g. out of memory), or a call
+    timed out (`LLMTimeout`). Retrying other jobs is pointless; callers should stop."""
+
+
+class LLMTimeout(LLMUnavailable):
+    """An Ollama call timed out (connect, read, write or pool). Treated like
+    LLMUnavailable: the model is almost always stuck, still loading or too slow,
+    so callers stop instead of failing every remaining job. No retry."""
 
 
 @dataclass
@@ -33,9 +39,14 @@ class LLMCallInfo:
 
 
 class OllamaClient:
-    def __init__(self, settings: LLMSettings) -> None:
+    def __init__(
+        self, settings: LLMSettings, *, transport: httpx.BaseTransport | None = None
+    ) -> None:
+        # `transport` is a test seam (e.g. httpx.MockTransport); None = httpx's normal transport.
         self.settings = settings
-        self._http = httpx.Client(base_url=settings.base_url, timeout=settings.timeout_s)
+        self._http = httpx.Client(
+            base_url=settings.base_url, timeout=settings.timeout_s, transport=transport
+        )
 
     def __enter__(self) -> OllamaClient:
         return self
@@ -103,7 +114,14 @@ class OllamaClient:
                 f"Cannot reach Ollama at {s.base_url}. Is it running? (`ollama serve`)"
             ) from e
         except httpx.TimeoutException as e:
-            raise LLMError(f"Ollama timed out after {s.timeout_s}s (model {s.model}).") from e
+            # Stop-the-run error, not per-job: a timeout almost always means the model is stuck.
+            # Keep "[" out of this message: cli._fail prints it as Rich markup.
+            raise LLMTimeout(
+                f"Ollama timed out after {s.timeout_s:g}s (model {s.model})."
+                " The model may be stuck, still loading or too slow for this machine."
+                " Try a smaller model (jobbot --model <name> ...)"
+                " or a larger llm.timeout_s in config/settings.yaml."
+            ) from e
         if r.status_code == 400 and "think" in payload and "thinking" in r.text.lower():
             # Model has no thinking mode (e.g. llama3.2): retry once without the option.
             payload.pop("think")
