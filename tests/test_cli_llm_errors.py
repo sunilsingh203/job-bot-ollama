@@ -1,18 +1,21 @@
 """CLI behaviour when Ollama times out (no Ollama, no network, no real data/)."""
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import httpx
 import pytest
-from conftest import ScriptedHandler, ask
+from fakes import FakePage
+from llm_fakes import ScriptedHandler, ask
 from rich.console import Console
 from typer.testing import CliRunner
 
 from jobbot import cli
-from jobbot.config import Settings
+from jobbot.config import Search, Settings
 from jobbot.db import JobStore
-from jobbot.llm.client import OllamaClient
+from jobbot.llm.client import LLMUnavailable, OllamaClient
 from jobbot.models import Decision, Job
+from jobbot.platforms.indeed.scanner import ScanStats
 
 runner = CliRunner()
 
@@ -103,6 +106,7 @@ def test_decide_stops_on_timeout_with_hint(settings, monkeypatch, timeout_error)
     assert "Decided 1 (pending_review: 1)" in out
     stop_lines = [line for line in out.splitlines() if line.startswith("Stopped")]
     assert len(stop_lines) == 1 and str(timeout_error) in stop_lines[0]
+    assert stop_lines[0].startswith("Stopped - LLM timed out:")
     assert "-> failed" not in out
     assert _counts(settings) == {"pending_review": 1, "new": 2}
 
@@ -127,3 +131,53 @@ def test_resumes_index_timeout_exits_1(settings, monkeypatch, timeout_error):
 
     assert result.exit_code == 1, result.output
     assert f"Error: {timeout_error}" in result.output
+
+
+def test_decide_unavailable_stop_keeps_unavailable_label(settings, monkeypatch):
+    """Review F-1 regression: only a timeout says "timed out"; Ollama down says unavailable."""
+    _seed(settings, ["a", "b"])
+    apply = Decision(decision="apply", stage="llm", reason="good", resume_id="r1", score=80)
+    down = LLMUnavailable("Cannot reach Ollama at http://localhost:11434. Is it running?")
+    matcher = ScriptedMatcher({"a": apply, "b": down})
+    _client_factory(monkeypatch, ScriptedHandler(httpx.Response(599)))
+    monkeypatch.setattr(cli, "_build_matcher", lambda client: matcher)
+
+    result = runner.invoke(cli.app, ["decide"])
+
+    assert result.exit_code == 0, result.output
+    stop_lines = [line for line in result.output.splitlines() if line.startswith("Stopped")]
+    assert stop_lines == [f"Stopped - LLM unavailable: {down}"]
+    assert _counts(settings) == {"pending_review": 1, "new": 1}
+
+
+def test_scan_decide_stops_on_timeout(settings, monkeypatch, timeout_error):
+    """Review F-3: `scan --decide` reaches the same stop as `decide` (browser and scanner faked)."""
+    _seed(settings, ["a", "b", "c"])
+    monkeypatch.setattr(cli, "load_searches", lambda config_dir: [Search(name="s1", query="java")])
+
+    @contextmanager
+    def fake_open_browser(browser_settings):
+        yield None, FakePage()
+
+    class FakeScanner:
+        def __init__(self, page, store, settings, notify) -> None:
+            pass
+
+        def run(self, searches, max_pages=None) -> ScanStats:
+            return ScanStats()
+
+    monkeypatch.setattr(cli, "open_browser", fake_open_browser)
+    monkeypatch.setattr(cli, "IndeedScanner", FakeScanner)
+    apply = Decision(decision="apply", stage="llm", reason="good", resume_id="r1", score=80)
+    matcher = ScriptedMatcher({"a": apply, "b": timeout_error, "c": apply})
+    _client_factory(monkeypatch, ScriptedHandler(httpx.Response(599)))
+    monkeypatch.setattr(cli, "_build_matcher", lambda client: matcher)
+
+    result = runner.invoke(cli.app, ["scan", "--decide"])
+
+    assert result.exit_code == 0, result.output
+    assert matcher.calls == ["a", "b"]
+    stop_lines = [line for line in result.output.splitlines() if line.startswith("Stopped")]
+    assert stop_lines == [f"Stopped - LLM timed out: {timeout_error}"]
+    assert "-> failed" not in result.output
+    assert _counts(settings) == {"pending_review": 1, "new": 2}

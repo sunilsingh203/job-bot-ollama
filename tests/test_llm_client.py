@@ -6,7 +6,7 @@ Each error type is chosen by its effect on the whole decide run: `LLMUnavailable
 
 import httpx
 import pytest
-from conftest import Echo, ScriptedHandler, ask, chat_answer
+from llm_fakes import Echo, ScriptedHandler, ask, chat_answer
 
 from jobbot.llm.client import LLMError, LLMTimeout, LLMUnavailable
 

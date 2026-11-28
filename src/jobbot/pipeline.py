@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from jobbot.db import JobStore, row_to_job
-from jobbot.llm.client import LLMError, LLMUnavailable
+from jobbot.llm.client import LLMError, LLMTimeout, LLMUnavailable
 from jobbot.matcher.decide import Matcher
 from jobbot.models import Decision, Job
 
@@ -20,6 +20,7 @@ class DecideStats:
     failed: int = 0
     by_status: Counter[str] = field(default_factory=Counter)
     aborted: str | None = None  # set when the LLM became unavailable or timed out
+    timed_out: bool = False  # the stop was an LLMTimeout (for the CLI's stop label)
 
 
 def decide_pending(
@@ -43,6 +44,7 @@ def decide_pending(
             decision = matcher.decide(job)
         except LLMUnavailable as e:
             stats.aborted = str(e)
+            stats.timed_out = isinstance(e, LLMTimeout)
             break
         except LLMError as e:
             store.mark_failed(row["id"], str(e))

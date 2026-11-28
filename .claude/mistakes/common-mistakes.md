@@ -47,7 +47,7 @@ Entry format:
 - **How to avoid:** every new branch, CLI flag or error path gets a test in the same change. Use
   a fake LLM client or page object instead of skipping the test. The implementation plan maps each AC to a test.
 - **Evidence:** AC tables in `features/{resume-matcher,indeed-scanner,job-store}/specification.md`.
-- **Seen:** 1× (last 2026-11-26) · **Clean streak:** 2/3 (2026-11-27: llm-timeout-stops-run, fake-client tests; 2026-11-28: failure-screenshots, fake-page tests)
+- **Seen:** 2× (last 2026-11-28: llm-timeout-stops-run shipped `scan --decide` untested, review F-3) · **Clean streak:** 1/3 (2026-11-28: remediation added a test for every fix)
 
 ## M-003: Error type picked without thinking about the effect on the whole run
 - **Mistake:** an Ollama timeout raises `LLMError` (per-job), not `LLMUnavailable` (stop the run).

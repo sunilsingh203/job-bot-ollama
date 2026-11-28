@@ -1,5 +1,10 @@
 # Changelog: job-store
 
+## 2026-11-28: Review remediation (llm-timeout-stops-run)
+- A timeout stop now prints `Stopped - LLM timed out: ...`. Ollama-down stops still print `Stopped - LLM unavailable: ...`. The label change was approved by the developer in chat.
+- Tests: `scan --decide` timeout stop and the unavailable-label regression; LLM test helpers moved to `tests/llm_fakes.py`.
+- See `changes/llm-timeout-stops-run/review.md` section 6.
+
 ## 2026-11-27: Ollama timeouts stop the decide run. See changes/llm-timeout-stops-run/.
 - An Ollama timeout (connect, read, write or pool, on any attempt) now raises `LLMTimeout`, a subclass of `LLMUnavailable`, so `decide_pending` stops on the first timeout with no retry. The current and remaining jobs stay `new`; previously each timed-out job became `failed` and the run went on.
 - The stop message names the model and `llm.timeout_s` and suggests a smaller model (`jobbot --model`) or a larger `llm.timeout_s`. A stopped run still exits 0.

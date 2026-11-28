@@ -119,6 +119,7 @@ def test_decide_pending_aborts_when_llm_unavailable(store):
     matcher = FakeMatcher({"a": LLMUnavailable("out of memory"), "b": None})
     stats = decide_pending(store, matcher)
     assert stats.aborted == "out of memory"
+    assert not stats.timed_out
     assert matcher.calls == ["a"]  # did not keep hammering the LLM
     assert store.counts() == {"new": 2}  # untouched, will be retried next run
 
@@ -134,6 +135,7 @@ def test_decide_pending_stops_on_timeout(store, timeout_error):
     assert matcher.calls == ["a", "b"]  # stopped at the first timeout, no retry
     assert stats.decided == 1 and stats.failed == 0
     assert stats.aborted == str(timeout_error)
+    assert stats.timed_out
     assert reported == ["a"]  # no "failed" report for the timed-out job
 
     # The stop touches no job: a keeps its decision, b and c stay new for the next run.

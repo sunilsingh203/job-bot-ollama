@@ -414,7 +414,8 @@ def _run_decide(store: JobStore, settings: Settings, *, limit: int | None) -> No
     summary = ", ".join(f"{k}: {v}" for k, v in sorted(stats.by_status.items())) or "nothing"
     console.print(f"[bold]Decided {stats.decided}[/] ({summary})")
     if stats.aborted:
-        console.print(f"[red]Stopped - LLM unavailable:[/] {escape(stats.aborted)}")
+        cause = "LLM timed out" if stats.timed_out else "LLM unavailable"
+        console.print(f"[red]Stopped - {cause}:[/] {escape(stats.aborted)}")
 
 
 @app.command()
