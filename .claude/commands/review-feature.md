@@ -13,6 +13,8 @@ Work on this feature's or change's own branch (cut from `develop`; see
 `documentation/development/standards/git.md`). If you are on `develop` or `main`, stop and ask.
 
 ## 1. Read first
+- `README.md` (the developer's description): check that every "Must have" and the "Done when"
+  are delivered, and report any gap as a finding
 - `specification.md` (or `change-definition.md` + the capability spec), `implementation-plan.md`,
   `plan-approval.md` (read only; note its approved commit and conditions)
 - `CLAUDE.md`, `.claude/rules/*.md`

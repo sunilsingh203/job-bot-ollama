@@ -37,6 +37,7 @@ Indeed/Ollama behaviour, Claude will tell you to move it up to Lane B. You decid
 | # | You type | What happens | File created |
 |---|---|---|---|
 | 0 | *(automatic)* | Claude creates `feature/review-dashboard` from the latest `develop` | the branch |
+| 0b | *(you)* write `features/review-dashboard/README.md` (copy `templates/feature-readme.md`): what you want, why, must have, done when, in plain English | If it's missing, Claude asks for it (or drafts it from your chat message, for your OK) | `README.md` |
 | 1 | `/define-feature review-dashboard` | Claude reads the docs and code, **asks you questions**, then writes the spec with numbered acceptance criteria (AC-1, AC-2…) | `features/review-dashboard/specification.md` |
 | 2 | `/plan-feature review-dashboard` | Claude writes the plan: DB changes, modules, tests per AC, steps, risks | `implementation-plan.md` |
 | 3 | *(you)* read both, edit them or ask Claude to change them, then commit | | |
@@ -58,6 +59,7 @@ If you fill it in by hand, it takes about 30 seconds:
 The same 7 steps, using the path `<feature>/changes/<change>`:
 
 ```
+(you write job-store/changes/add-approved-status/README.md first)
 /define-feature job-store/changes/add-approved-status   → change-definition.md
 /plan-feature   job-store/changes/add-approved-status   → implementation-plan.md
 (you approve: in chat, or write plan-approval.md in that folder)

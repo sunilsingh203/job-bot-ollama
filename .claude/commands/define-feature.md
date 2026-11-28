@@ -25,7 +25,20 @@ New work goes on its own branch, cut from the **latest `develop`** (ADR-0006,
   `git switch -c <branch>`.
 - Never write this work on `develop` or `main`. Report the branch name at the end.
 
-## 1. Read first
+## 1. The developer's README (do this first, after the branch)
+Read `documentation/development/features/$ARGUMENTS/README.md`: the developer's short,
+plain-English description of what they want (template: `documentation/development/templates/feature-readme.md`).
+For an older Lane B change, a `request.md` in the change folder counts as its README.
+- If neither exists, **stop and ask the developer** to write one. They can copy the template, or
+  describe the feature in chat. In that case, draft `README.md` from their words, mark it
+  "Drafted by the AI from the developer's chat description, YYYY-MM-DD", show it, and wait for
+  their OK before writing the spec.
+- The README is the developer's intent. Every "Must have" must appear in the spec as a business
+  rule or an AC. "Not now" items go to Out of scope. Its questions become open questions. If
+  the README conflicts with `CLAUDE.md`'s safety rules or an existing spec, say so and ask.
+- Don't rewrite the README. It's the developer's file. Record your clarifications in the spec.
+
+## 1b. Read first
 - `CLAUDE.md` (non-negotiable rules, decisions, pipeline, layout)
 - `documentation/development/AI-DEVELOPMENT-WORKFLOW.md` (sections 3, 4, 5, 8)
 - `documentation/customer/` (the developer's goals, platform notes, Indeed observations)
@@ -34,8 +47,8 @@ New work goes on its own branch, cut from the **latest `develop`** (ADR-0006,
 - `.claude/rules/*.md`
 - Existing specs of related capabilities in `documentation/development/features/`
 - For Lane B: the capability's current `specification.md` and `changelog.md`
-- For Lane B: `request.md` in the change folder, if present (the developer's what/why/done-when;
-  treat its open questions as questions to resolve, not as decided rules)
+- (The README or legacy `request.md` from step 1. Treat its questions as questions to resolve,
+  not as decided rules.)
 
 ## 2. Inspect the code
 Look at what already exists in `src/jobbot/` and `tests/` for this capability (modules, CLI
