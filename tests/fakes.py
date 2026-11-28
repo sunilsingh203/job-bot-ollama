@@ -19,15 +19,20 @@ CHALLENGE_HTML = "<html><body><h1>Additional Verification Required</h1></body></
 EMPTY_HTML = "<html><body><p>No jobs found.</p></body></html>"
 
 
-def results_html(job_keys: list[str], *, json_data: bool = True) -> str:
-    """A results page with `a[data-jk]` cards, plus the job-cards JSON unless `json_data=False`."""
+def results_html(
+    job_keys: list[str], *, json_data: bool = True, json_keys: list[str] | None = None
+) -> str:
+    """A results page with `a[data-jk]` cards, plus the job-cards JSON unless `json_data=False`.
+
+    `json_keys` sets the jobs listed in the JSON (default: the same as the cards).
+    """
     cards = "".join(f'<li><a data-jk="{jk}">Developer {jk}</a></li>' for jk in job_keys)
     script = ""
     if json_data:
         model = {
             "results": [
                 {"jobkey": jk, "displayTitle": f"Developer {jk}", "company": "Acme"}
-                for jk in job_keys
+                for jk in (job_keys if json_keys is None else json_keys)
             ],
             "loggedIn": True,
         }

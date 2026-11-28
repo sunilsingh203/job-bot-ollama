@@ -1,5 +1,10 @@
 # Changelog: indeed-scanner
 
+## 2026-11-28: Review remediation (`changes/failure-screenshots/review.md`)
+- **F-1:** a sixth failure point, `json_empty`. When a search's first page (or the description-retry reload) shows cards but the job JSON lists no jobs, the scanner warns, saves a snapshot and skips that search's paging. It never reads those cards (developer decision 2026-11-28: they may be "jobs you may like", not results). AC-38.
+- **F-2:** BR-3 documents that, while a check stays up, a job-level skip ends the scan after about 2 × `human_wait_timeout_s` (no behaviour change).
+- **F-3** (partial summary on stop) deferred as open question 16. **F-4** (real-Chrome check of a page-load error) left to the developer.
+
 ## 2026-11-28: Failure screenshots (`changes/failure-screenshots`)
 - At five failure points the scanner saves a local snapshot (PNG + page HTML) to `data/screenshots/` and prints the path: `goto_error`, `no_cards` (first page of a search or the description-retry reload only), `dom_fallback` (once per run, plus a summary line), `no_description_<jobkey>` (once per job), `human_timeout`. Newest `browser.screenshots_keep` (default 50) sets kept. Writing a snapshot never navigates and never crashes the scan (`browser.save_snapshot`).
 - A results-page `goto` error now stops the scan cleanly (`Scan stopped: page load failed: ... Screenshot: ... (progress is saved)`, exit 0, `--decide` still runs) instead of a traceback (`PageLoadError`).

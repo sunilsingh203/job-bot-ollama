@@ -209,6 +209,43 @@ def test_dom_fallback_snapshot_once_per_run(make_run):
     assert stats.new_jobs == 13 and stats.descriptions == 13  # processed as before
 
 
+# ------------------------------------------------- empty job JSON with cards (review F-1)
+
+
+def test_json_empty_on_first_page_snapshots_and_skips_search(make_run):
+    # Cards are on the page, but the job JSON lists none: warn, snapshot, never read the cards.
+    page = FakePage(
+        {
+            url(S1): results_html(["r0", "r1"], json_keys=[]),
+            url(S2): results_html(["k0"]),
+        },
+        descriptions=descs(["k0"]),
+    )
+    run = make_run(page)
+    stats = run.scanner.run([S1, S2])
+    assert run.snaps() == ["json_empty"]
+    assert len(run.lines("job JSON lists no jobs")) == 1
+    for jk in ("r0", "r1"):  # the cards are never stored as jobs
+        assert run.store.get_by_key("indeed", jk) is None
+    assert stats.new_jobs == 1 and stats.per_search == {"s1": 0, "s2": 1}  # next search ran
+
+
+def test_json_empty_after_full_page_is_end_of_results(make_run):
+    first = keys("f", 10)
+    page = FakePage(
+        {
+            url(S1, 0): results_html(first),
+            url(S1, 1): results_html(["r0"], json_keys=[]),  # e.g. "jobs you may like" cards
+        },
+        descriptions=descs(first),
+    )
+    run = make_run(page)
+    stats = run.scanner.run([S1])
+    assert run.snaps() == []
+    assert run.lines("job JSON lists no jobs") == []
+    assert stats.new_jobs == 10
+
+
 # ------------------------------------------------------------------ F-4 no description (AC-C10)
 
 

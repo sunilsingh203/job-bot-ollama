@@ -4,8 +4,9 @@ Descriptions are read the way a person would: click a card on the results page a
 right-hand job pane. Pace is slow and randomised; Cloudflare checks and sign-in pages pause the
 scan until the user deals with them in the window.
 
-When something unexpected happens (page load error, no cards, DOM fallback, unreadable
-description, unsolved check) a failure snapshot (PNG + HTML) is saved to `data/screenshots/`.
+When something unexpected happens (page load error, no cards, DOM fallback, empty job JSON,
+unreadable description, unsolved check) a failure snapshot (PNG + HTML) is saved to
+`data/screenshots/`.
 A page-load error stops the scan; the others skip the page or job and carry on. An unsolved
 check skips the item, but HUMAN_TIMEOUTS_IN_A_ROW_LIMIT of them in a row stop the scan.
 """
@@ -46,6 +47,7 @@ REASON_NO_CARDS = "no_cards"
 REASON_DOM_FALLBACK = "dom_fallback"
 REASON_NO_DESCRIPTION = "no_description"
 REASON_HUMAN_TIMEOUT = "human_timeout"
+REASON_JSON_EMPTY = "json_empty"  # job JSON lists no jobs although cards are on the page
 # Unsolved checks/sign-ins in a row (nothing got past a check in between) that stop the scan.
 HUMAN_TIMEOUTS_IN_A_ROW_LIMIT = 2
 
@@ -137,7 +139,13 @@ class IndeedScanner:
                     self._snapshot(REASON_NO_CARDS)
                 return None
         human_pause(1.0, 2.5)  # let the page settle like a person would
-        return parse.parse_search_page(self.page.content(), self.base_url)
+        result = parse.parse_search_page(self.page.content(), self.base_url)
+        if result.source == "json" and not result.listings and snapshot_if_empty:
+            # Cards are shown but the job JSON lists none: Indeed may have changed its JSON.
+            # Don't read the cards (they may be recommendations, not results); keep evidence.
+            self.notify("  ! job JSON lists no jobs although cards are shown - skipped this page")
+            self._snapshot(REASON_JSON_EMPTY)
+        return result
 
     def _process_page(
         self, result: parse.SearchPage, search: Search, url: str, stats: ScanStats
