@@ -122,6 +122,10 @@ All templates live in [`templates/`](templates/).
    (`git fetch`, `git switch develop`, `git pull --ff-only`, `git switch -c feature/<capability>`).
    Everything below happens on that branch and goes into `develop` as one PR
    ([standards/git.md](standards/git.md), [ADR-0006](decisions/ADR-0006-develop-and-feature-branches.md)).
+0b. **Describe** -> `README.md`, **written by the developer** in short, plain English (template
+   `templates/feature-readme.md`): what they want, why, must have / nice to have / not now, and
+   done when. `/define-feature` stops and asks for it if it's missing. The AI may draft it from the
+   developer's chat description, marked as drafted, but only with the developer's OK.
 1. **Define** -> `specification.md`: purpose, actors, scope / out of scope, business rules,
    data entities, states and transitions, permissions and data scope (for jobbot: what the
    bot may do on its own vs. what needs the human), validation and error cases, numbered
@@ -146,7 +150,8 @@ All templates live in [`templates/`](templates/).
 
 ### Lane B: material change
 
-Branch: `change/<capability>-<change>` from the latest `develop` (step 0 of Lane A).
+Branch: `change/<capability>-<change>` from the latest `develop` (step 0 of Lane A). The developer
+first writes the change's `README.md` (step 0b of Lane A). Older Lane B folders use `request.md` for this.
 
 Same as Lane A, inside `features/<capability>/changes/<change>/`:
 `change-definition.md` -> `implementation-plan.md` -> `plan-approval.md` (developer, by hand or recorded from chat) -> implement -> `review.md`.
@@ -156,7 +161,8 @@ Same as Lane A, inside `features/<capability>/changes/<change>/`:
 Branch first: `fix/<change>` from the latest `develop`, before `implementation-plan.md` is written.
 
 In `documentation/development/changes/<change>/` (see [changes/README.md](changes/README.md)):
-`request.md` (the developer, can be short) -> `implementation-plan.md` (the AI) -> the developer's
+`request.md` (**written by the developer**, can be short; `/plan-small-change` stops if it's
+missing) -> `implementation-plan.md` (the AI) -> the developer's
 go-ahead in chat or a line in the file -> implement -> `review.md` (brief verification).
 
 ### Lane D: developer-directed tweak

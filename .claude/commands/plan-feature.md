@@ -11,6 +11,8 @@ Write `documentation/development/features/$ARGUMENTS/implementation-plan.md` fro
 If `$ARGUMENTS` is empty, ask which capability and stop.
 
 ## 1. Read first
+- `documentation/development/features/$ARGUMENTS/README.md` (the developer's own description;
+  the plan must deliver every "Must have" and nothing from "Not now")
 - `documentation/development/features/$ARGUMENTS/specification.md` (Lane A) or
   `change-definition.md` (Lane B, plus the capability's `specification.md`). If neither exists,
   stop and suggest `/define-feature $ARGUMENTS`.

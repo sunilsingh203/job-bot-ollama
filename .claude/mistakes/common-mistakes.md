@@ -69,3 +69,10 @@ Entry format:
   count exactly what the setting's name says. Add a test that checks the limit.
 - **Evidence:** `src/jobbot/platforms/indeed/scanner.py`; indeed-scanner Open questions.
 - **Seen:** 1× (last 2026-11-26) · **Clean streak:** 1/3 (2026-11-28: failure-screenshots, keep count from `browser.screenshots_keep`, guard limit a named constant, both tested)
+
+## M-005: Wrote files before creating the work's branch
+- **Mistake:** started a docs change by writing `templates/feature-readme.md` on `develop`, then created `docs/developer-readme`. ADR-0006 says to branch before the first file.
+- **Why it matters:** work done on `develop` or `main` by accident can end up committed there without a PR, or mixed with other work.
+- **How to avoid:** the first tool call of any new Lane A/B/C (or docs) piece of work is the branch step: `git status`, fetch, update `develop`, `git switch -c <branch>`. Only then write files.
+- **Evidence:** 2026-11-28, the developer-README workflow change (caught by Claude; the file was untracked and moved to the branch).
+- **Seen:** 1× (last 2026-11-28) · **Clean streak:** 0/3
