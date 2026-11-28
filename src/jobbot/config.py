@@ -60,6 +60,8 @@ class BrowserSettings(BaseModel):
     profile_dir: Path = PROJECT_ROOT / "browser_profile"
     # Seconds to wait for the user to solve a Cloudflare check / sign in before giving up.
     human_wait_timeout_s: float = 300
+    # Newest failure snapshot sets (.png + .html) kept in <data_dir>/screenshots/.
+    screenshots_keep: int = Field(default=50, ge=1)
 
 
 class ScanSettings(BaseModel):

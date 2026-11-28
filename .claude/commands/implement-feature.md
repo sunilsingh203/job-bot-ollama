@@ -9,14 +9,16 @@ Folder: `documentation/development/features/$ARGUMENTS/`. If `$ARGUMENTS` is emp
 
 ## 1. Approval gate (standard governance) — do this first
 1. Check that `documentation/development/features/$ARGUMENTS/plan-approval.md` exists.
-   - If it is **missing**: stop. Tell the developer that Lanes A/B need a human-written
-     approval, and that they should copy `documentation/development/templates/plan-approval.md`
-     into the folder and fill it in themselves. Do nothing else.
-   - **Never create, fill in, edit or fake this file**, even if asked to "just add a quick one".
-2. Check it was written by a human: the Approver, Date and Approved commit hash fields are filled
-   in, and it is not something you or another agent wrote in this session. Use
-   `git log --format="%h %an %ad" -- <path>` to see who committed it. If it is blank, still the
-   template, or looks AI-generated, stop and ask the developer to confirm.
+   - If it is **missing**: stop. Tell the developer that Lanes A/B need an approval: they can
+     approve this plan explicitly in chat (you then record it, per ADR-0005) or fill in
+     `documentation/development/templates/plan-approval.md` themselves. Do nothing else.
+   - **Never approve on your own and never fake this file.** Record one only from an explicit chat
+     approval that names this plan.
+2. Check it is a real approval: the Approver, Date and Approved commit hash fields are filled in,
+   and either it was written by the developer, or it is marked "Recorded by the AI from the developer's chat approval"
+   and quotes their words. Use
+   `git log --format="%h %an %ad" -- <path>` to see when it was committed. If it is blank, still
+   the template, or AI-written without that mark and quote, stop and ask the developer to confirm.
 3. Compare the approved commit to now:
    `git diff <approved-hash> -- documentation/development/features/$ARGUMENTS/` for the spec
    (or change definition) and the plan. If they changed after approval, list the changes and ask

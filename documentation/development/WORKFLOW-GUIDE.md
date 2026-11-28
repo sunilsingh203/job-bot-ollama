@@ -22,8 +22,8 @@ Every piece of work goes in one of four lanes. The bigger the risk, the more pap
 
 | Lane | When | Example in this project | Approval |
 |---|---|---|---|
-| **A. New feature** | Something the tool can't do yet | The review dashboard, the form filler | You write `plan-approval.md` |
-| **B. Big change** | Changes how an existing feature behaves | New status values, a new decide prompt, schema changes | You write `plan-approval.md` |
+| **A. New feature** | Something the tool can't do yet | The review dashboard, the form filler | You approve (`plan-approval.md`) |
+| **B. Big change** | Changes how an existing feature behaves | New status values, a new decide prompt, schema changes | You approve (`plan-approval.md`) |
 | **C. Small fix** | A bug or minor tweak | Fix salary parsing, add a `--since` flag | "go ahead" in chat |
 | **D. Tiny tweak** | Trivial, just ask | Rename a label, change a log message | none, just ask |
 
@@ -39,12 +39,12 @@ Indeed/Ollama behaviour, Claude will tell you to move it up to Lane B. You decid
 | 1 | `/define-feature review-dashboard` | Claude reads the docs and code, **asks you questions**, then writes the spec with numbered acceptance criteria (AC-1, AC-2…) | `features/review-dashboard/specification.md` |
 | 2 | `/plan-feature review-dashboard` | Claude writes the plan: DB changes, modules, tests per AC, steps, risks | `implementation-plan.md` |
 | 3 | *(you)* read both, edit them or ask Claude to change them, then commit | | |
-| 4 | *(you)* copy `templates/plan-approval.md` into the feature folder and fill it in | Claude **can never** write this file | `plan-approval.md` |
+| 4 | *(you)* say in chat *"approve the plan for review-dashboard"*, **or** fill in `templates/plan-approval.md` yourself | Claude records your chat approval (quoting you); it never approves on its own | `plan-approval.md` |
 | 5 | `/implement-feature review-dashboard` | Claude checks your approval exists, builds step by step, runs pytest + ruff | code, tests, migrations |
 | 6 | `/review-feature review-dashboard` | Claude checks every AC (pass/fail), lists findings by severity | `review.md` |
 | 7 | `/remediate-review review-dashboard` | Claude fixes findings and records each as resolved, deferred or rejected | `review.md` updated |
 
-Filling in `plan-approval.md` takes about 30 seconds:
+If you fill it in by hand, it takes about 30 seconds:
 
 ```
 | Approver             | <your name>                              |
@@ -59,7 +59,7 @@ The same 7 steps, using the path `<feature>/changes/<change>`:
 ```
 /define-feature job-store/changes/add-approved-status   → change-definition.md
 /plan-feature   job-store/changes/add-approved-status   → implementation-plan.md
-(you write plan-approval.md in that folder)
+(you approve: in chat, or write plan-approval.md in that folder)
 /implement-feature job-store/changes/add-approved-status
 /review-feature    job-store/changes/add-approved-status
 ```
@@ -105,7 +105,7 @@ tests/                             pytest
 2. **Everything stays local:** only the local Ollama LLM, no cloud APIs.
 3. **Protect the Indeed account:** visible Chrome, human-like delays, daily caps. A human solves CAPTCHAs.
 4. **Personal data is never committed:** `resumes/`, `profile.yaml`, `data/`, `browser_profile/`, `config/settings.yaml`.
-5. **Only a human writes `plan-approval.md`.**
+5. **Only you approve plans.** Claude may record your *explicit* chat approval of a named plan, never approve on its own.
 6. **DB schema changes only through a new SQL file** in `src/jobbot/migrations/`. Never edit an old one.
 7. **No "tests passed" without actually running them.**
 

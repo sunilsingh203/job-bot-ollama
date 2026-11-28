@@ -64,8 +64,8 @@ Only Chrome talks to the internet. The LLM, the data and the config never leave 
 | `text.py` | Text normalisation, HTML to text |
 | `db.py` | `JobStore` over SQLite: upsert listings, store descriptions (duplicate detection), save decisions, mark/reset failed, queries. Applies migrations from `migrations/` via `PRAGMA user_version` |
 | `migrations/` | `NNNN_name.sql` schema files, shipped with the package ([ADR-0003](../decisions/ADR-0003-sql-migration-files.md)) |
-| `pipeline.py` | `decide_pending`: runs the matcher over `new` jobs. `LLMUnavailable` stops the run; `LLMError` marks one job `failed` |
-| `llm/client.py` | `OllamaClient.chat_json`: JSON-schema structured output, pydantic validation, one retry, `LLMError` / `LLMUnavailable` |
+| `pipeline.py` | `decide_pending`: runs the matcher over `new` jobs. `LLMUnavailable` (including a timeout, `LLMTimeout`) stops the run; any other `LLMError` (invalid JSON) marks one job `failed` |
+| `llm/client.py` | `OllamaClient.chat_json`: JSON-schema structured output, pydantic validation, one retry, `LLMError` (invalid JSON) / `LLMUnavailable` (Ollama down, HTTP error) / `LLMTimeout` (an `LLMUnavailable`: any timeout, no retry) |
 | `llm/prompts.py` | All prompt templates, with version constants (`RESUME_PROFILE_PROMPT_VERSION`, `DECIDE_PROMPT_VERSION`) |
 | `resumes/library.py` | Loads `resumes/resumes.yaml` (role tracks, resume entries) |
 | `resumes/parser.py` | PDF/DOCX/TXT to text |
@@ -73,7 +73,7 @@ Only Chrome talks to the internet. The LLM, the data and the config never leave 
 | `matcher/filters.py` | Rule-based pre-filter (experience, senior titles, blacklists) |
 | `matcher/company_type.py` | startup vs MNC: MNC list, then company size, then LLM |
 | `matcher/decide.py` | `Matcher`: filter, prompt, schema-constrained LLM call, post-checks (`min_score_to_apply`, `select_resume`), logs to `decisions.jsonl` |
-| `browser.py` | Headed persistent Chrome (`launch_persistent_context`, `channel="chrome"`), `human_pause`, `wait_for_human` |
+| `browser.py` | Headed persistent Chrome (`launch_persistent_context`, `channel="chrome"`), `human_pause`, `wait_for_human`; platform-neutral failure snapshots (`save_snapshot`: read-only PNG + HTML to `data/screenshots/`, retention); `PageLoadError` and `HumanActionTimeout` (carry the snapshot) |
 | `platforms/indeed/parse.py` | Pure parsing of Indeed pages. **All Indeed selectors and markers live here** |
 | `platforms/indeed/scanner.py` | `IndeedScanner`: searches, card clicks, description reading, pacing, challenge/sign-in waits |
 | `platforms/indeed/applier.py` | Planned: Easily-apply form filler, stops before Submit |

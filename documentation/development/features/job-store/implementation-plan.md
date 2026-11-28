@@ -90,7 +90,7 @@ Destructive changes: none (this is the initial schema).
 |---|---|---|
 | `data_dir` | `data` (project-relative) | DB path `data_dir/jobs.db` |
 | `llm.model` (or `jobbot --model X`) | `gpt-oss:20b` | Printed by `_run_decide`; used by the matcher |
-| `llm.timeout_s` | 600 | Indirect: an Ollama timeout becomes a per-job `failed` |
+| `llm.timeout_s` | 600 | Indirect: an Ollama timeout stops the decide run (since 2026-11-27, changes/llm-timeout-stops-run; before that it became a per-job `failed`) |
 | CLI `decide --limit` | none | Max jobs per decide run |
 | CLI `jobs --limit` | 30 | Max rows listed (the store default is 50) |
 
@@ -142,7 +142,7 @@ Suggested future tests (not written): `ValueError` on a missing key; COALESCE re
 | SQLite concurrency (scan + decide + future dashboard) | `database is locked` errors | Short transactions (a commit per write) | No WAL, no busy-timeout setting, no retry. Revisit before the Streamlit dashboard (Step 3). |
 | No status-transition guards | Invalid lifecycle states, e.g. a decided job reset to `new` | Callers gate writes (`needs_description`, `to_decide`) | Important before adding `approved`/`applied`, which feed the approve-before-submit flow. |
 | Overly broad duplicate rule | Legitimate jobs hidden as `duplicate` | Error text points to the original job id | See spec Open question 4. |
-| Timeouts treated as per-job failures | A slow model fails many jobs one by one, each costing `llm.timeout_s` | `--retry-failed` | See spec Open question 2. |
+| ~~Timeouts treated as per-job failures~~ | A slow model fails many jobs one by one, each costing `llm.timeout_s` | `--retry-failed` | Resolved 2026-11-27 by changes/llm-timeout-stops-run (a timeout stops the run). See spec Open question 2. |
 | Schema evolution | Old DBs can't be altered with `CREATE IF NOT EXISTS` | Fixed by migration files (ADR-0003) | — |
 | Prompt version only inside JSON | Hard to compare prompt versions with SQL | `json_extract` possible | A migration could add columns. |
 | Unbounded DB growth | A larger file and slower listings over months | Indexes on `status`, hash | No pruning or archiving. |

@@ -2,8 +2,8 @@
 
 Details: `documentation/development/standards/documentation.md`, `documentation/development/AI-DEVELOPMENT-WORKFLOW.md`.
 
-- Classify work first (Lane A/B/C/D). Governance is **standard**: Lanes A/B need a human-written `plan-approval.md` before implementation; Lanes C/D go ahead on the developer's chat go-ahead.
-- **Never create, fill, edit or fake a `plan-approval.md`.** If it's missing, stop and tell the developer.
+- Classify work first (Lane A/B/C/D). Governance is **standard**: Lanes A/B need a `plan-approval.md` before implementation; Lanes C/D go ahead on the developer's chat go-ahead.
+- `plan-approval.md`: written by the developer, or recorded by the AI **only** when the developer explicitly approves that named plan in chat (ADR-0005). Mark it "Recorded by the AI from the developer's chat approval", quote their words, fill date + approved commit hash. Never approve on your own, from a vague go-ahead, or with blocking open questions; never edit an existing approval. If it's missing, stop and tell the developer.
 - Update docs in the same change as the code:
 
 | Changed | Update |

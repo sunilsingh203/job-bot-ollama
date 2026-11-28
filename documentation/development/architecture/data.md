@@ -67,7 +67,7 @@ will be added by migrations when `review-dashboard` and `form-filler` are built.
 | `skipped` | `save_decision` | LLM skip, or apply downgraded (low score, no role track, no resume) |
 | `pending_review` | `save_decision` | Apply, Easily apply: waits for the user |
 | `manual` | `save_decision` | Apply, external apply: the user applies on the company site |
-| `failed` | `mark_failed` | Bad LLM output after one retry. `LLMUnavailable` does not mark jobs; the run stops |
+| `failed` | `mark_failed` | Bad LLM output (invalid JSON) after one retry. `LLMUnavailable`, including a timeout (`LLMTimeout`), does not mark jobs; the run stops |
 | `approved` / `rejected` | dashboard (planned) | The user's review |
 | `filling` / `ready_to_submit` | form filler (planned) | Bot fills, stops before Submit |
 | `applied` | form filler (planned) | Confirmation page detected after the user clicked Submit |
@@ -79,13 +79,13 @@ will be added by migrations when `review-dashboard` and `form-filler` are built.
 | `jobs.db` | `JobStore` | The table above |
 | `resume_profiles.json` | `resumes/profiler.py` | Cache of LLM resume summaries, keyed by resume id. Each entry: `sha256` of the file, `file`, `prompt_version`, `model`, `profile` (`headline`, `total_experience_years`, `seniority`, `core_skills`, `other_skills`, `domains`, `highlights`, `summary`). An entry is rebuilt when the file hash, prompt version or model changes. Stale ids are dropped |
 | `decisions.jsonl` | `matcher/decide.py` (`Matcher._log`) | Append-only, one JSON object per decision: `ts`, `job` (`title`, `company`, `location`, `url`, `platform`, `description_sha256`) and `decision` (the full `Decision` model, incl. `model`, `prompt_version`, `latency_s`). Used for accuracy review and prompt comparisons |
-| `screenshots/` | planned (scanner/filler failures) | Screenshot saved when an Indeed page doesn't match the expected selectors. May show personal data |
+| `screenshots/` | `browser.save_snapshot`, called by the scanner (`platforms/indeed/scanner.py`) at its failure points; the planned form filler can reuse it | Failure snapshot sets `<YYYYMMDD-HHMMSS-mmm>_<reason>[_<jobkey>].png` + `.html` (local time; full-page PNG; page HTML as UTF-8). Reasons: `goto_error`, `no_cards`, `dom_fallback`, `json_empty`, `no_description` (with the sanitised job key, `[A-Za-z0-9]{1,32}`), `human_timeout`. After each save only the newest `browser.screenshots_keep` (default 50) sets are kept; files not matching that name pattern are never touched. **May contain the signed-in name/email and session tokens:** never share, commit or turn into a fixture without scrubbing |
 
 ## Configuration and personal input files
 
 | File | Committed? | Contents |
 |---|---|---|
-| `config/settings.example.yaml` | yes | Documented defaults for `llm`, `matching`, `browser`, `scan` |
+| `config/settings.example.yaml` | yes | Documented defaults for `llm`, `matching`, `browser`, `scan` (incl. `browser.screenshots_keep`: newest failure snapshot sets kept, int >= 1, default 50) |
 | `config/settings.yaml` | **no** | The user's overrides (every key optional); validated by `config.Settings` |
 | `config/searches.yaml` | yes | Indeed searches (`name`, `query`, `location`, `max_pages`, `fromage`, `sort`, `extra_params`) |
 | `config/mnc_companies.txt` | yes | User-maintained MNC list (first source for company type) |

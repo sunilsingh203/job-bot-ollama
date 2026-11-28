@@ -1,8 +1,11 @@
 # Plan approval: <capability or change>
 
-> **Written by a human approver only. The AI must never create or fill this file.**
+> **Approved by the developer only.** Either the developer fills this in by hand, or the AI records
+> the developer's *explicit* chat approval of this plan (ADR-0005). In that case the AI marks it
+> "Recorded by the AI from the developer's chat approval" and quotes the developer's words. The AI
+> never approves on its own.
 >
-> Copy this template into the feature (or change) folder by hand and fill in every field yourself.
+> To fill it in by hand, copy this template into the feature (or change) folder.
 > Get the commit hash with `git rev-parse HEAD` after the spec and plan are committed.
 
 | Field | Value |

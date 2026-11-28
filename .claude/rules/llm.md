@@ -5,7 +5,7 @@ Details: ADR-0001, `documentation/development/standards/coding.md`.
 - **Ollama only**, at `llm.base_url` (default `http://localhost:11434`). No cloud LLM APIs.
 - Model name comes from config (`llm.model`, default `gpt-oss:20b`) or `jobbot --model`; never hard-code it in logic.
 - Every call goes through `OllamaClient.chat_json` with a **JSON schema** (`format`) and a **pydantic** output model.
-- On invalid output: **retry once, then fail** (`LLMError`) and mark the job `failed`. Never guess or patch up an answer. `LLMUnavailable` (Ollama down, OOM, HTTP error) stops the run.
+- On invalid output: **retry once, then fail** (`LLMError`) and mark the job `failed`. Never guess or patch up an answer. `LLMUnavailable` (Ollama down, OOM, HTTP error, **timeout**, raised as `LLMTimeout`) stops the run, with no retry.
 - Constrain choices with schema enums built from `resumes.yaml` (`decision_schema`); post-check results in code.
 - **Prompts live only in `src/jobbot/llm/prompts.py`**, with a version constant (`DECIDE_PROMPT_VERSION`, ...). Bump it whenever the prompt or schema changes; the version is stored with each decision and profile.
 - **One call at a time.** No parallel LLM calls (6 GB VRAM; the model runs mostly on CPU).
