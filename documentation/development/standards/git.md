@@ -1,8 +1,35 @@
 # Git standard
 
 ## Branches
-- `main` is the stable branch.
-- One branch per feature or change:
+Branching model ([ADR-0006](../decisions/ADR-0006-develop-and-feature-branches.md)):
+
+| Branch | Role |
+|---|---|
+| `main` | Stable. Receives `develop` only when the developer calls it stable (PR `develop` → `main`). Never commit to it directly. |
+| `develop` | The development branch. Every new piece of work starts from its **latest** state, and finished work is merged back into it by a PR. |
+| `feature/...`, `change/...`, `fix/...`, `docs/...` | One short-lived branch per piece of work, always cut from the latest `develop`. |
+
+**Starting new work (Lanes A, B, C):** create the branch **before writing the first file**. For Lane A/B
+that means at `/define-feature`, so the spec, plan, approval, code, tests and review all live on one
+branch and go in as one PR. For Lane C, it's at `/plan-small-change`.
+
+```
+git status                      # must be clean; if not, stop and ask the developer
+git fetch origin
+git switch develop
+git pull --ff-only origin develop
+git switch -c <branch>          # name from the table below
+```
+
+- If the branch already exists (work in progress), switch to it instead of creating it again.
+- If `develop` has moved on since the branch was cut, tell the developer and offer to merge the
+  latest `develop` into the branch. Ask before rebasing a branch that has been pushed.
+- `/implement-*`, `/review-*` and `/remediate-review` check that the current branch is the work's
+  branch. They never commit feature work to `develop` or `main`.
+- **Finishing:** push the branch (when the developer asks), open a PR into `develop`, and let the
+  developer merge it. Delete the branch after the merge.
+
+Branch names:
 
 | Work | Branch name |
 |---|---|
@@ -11,8 +38,8 @@
 | Lane C, small change / fix | `fix/<change>` or `change/<change>` |
 | Docs only | `docs/<topic>` |
 
-- Lane D tweaks can go on the current branch.
-- The AI commits only when the developer asks.
+- Lane D tweaks can go on the current branch (including `develop`).
+- The AI commits and pushes only when the developer asks.
 
 ## Commit messages
 - Imperative mood, short summary line (≤ 72 chars), optional body explaining *why*.

@@ -8,6 +8,10 @@ argument-hint: <capability> | <capability>/changes/<change>
 Write `documentation/development/features/$ARGUMENTS/review.md` from
 `documentation/development/templates/review.md`. If `$ARGUMENTS` is empty, ask and stop.
 
+## 0. Branch check
+Work on this feature's or change's own branch (cut from `develop`; see
+`documentation/development/standards/git.md`). If you are on `develop` or `main`, stop and ask.
+
 ## 1. Read first
 - `specification.md` (or `change-definition.md` + the capability spec), `implementation-plan.md`,
   `plan-approval.md` (read only; note its approved commit and conditions)

@@ -118,6 +118,10 @@ All templates live in [`templates/`](templates/).
 
 ### Lane A: new capability
 
+0. **Branch** -> before the first file, create `feature/<capability>` from the **latest `develop`**
+   (`git fetch`, `git switch develop`, `git pull --ff-only`, `git switch -c feature/<capability>`).
+   Everything below happens on that branch and goes into `develop` as one PR
+   ([standards/git.md](standards/git.md), [ADR-0006](decisions/ADR-0006-develop-and-feature-branches.md)).
 1. **Define** -> `specification.md`: purpose, actors, scope / out of scope, business rules,
    data entities, states and transitions, permissions and data scope (for jobbot: what the
    bot may do on its own vs. what needs the human), validation and error cases, numbered
@@ -142,10 +146,14 @@ All templates live in [`templates/`](templates/).
 
 ### Lane B: material change
 
+Branch: `change/<capability>-<change>` from the latest `develop` (step 0 of Lane A).
+
 Same as Lane A, inside `features/<capability>/changes/<change>/`:
 `change-definition.md` -> `implementation-plan.md` -> `plan-approval.md` (developer, by hand or recorded from chat) -> implement -> `review.md`.
 
 ### Lane C: small change / fix
+
+Branch first: `fix/<change>` from the latest `develop`, before `implementation-plan.md` is written.
 
 In `documentation/development/changes/<change>/` (see [changes/README.md](changes/README.md)):
 `request.md` (the developer, can be short) -> `implementation-plan.md` (the AI) -> the developer's
@@ -219,7 +227,8 @@ this section (project-wide) or in the feature's `specification.md` (per feature)
 
 ## 8. Mandatory working rules (all lanes)
 
-1. Understand the request, then read the relevant feature and architecture docs.
+1. Understand the request, then read the relevant feature and architecture docs. For Lanes A/B/C,
+   work on that work's own branch, cut from the latest `develop` (never directly on `develop` or `main`).
 2. Inspect the existing implementation before proposing anything.
 3. Identify the affected layers: DB, core logic, CLI/dashboard, safety rules, tests, docs.
 4. List ambiguities, conflicts and missing decisions, and **ask. Don't invent business rules.**

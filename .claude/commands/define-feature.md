@@ -15,6 +15,16 @@ Target folder: `documentation/development/features/$ARGUMENTS/`
 
 If `$ARGUMENTS` is empty, ask which capability to define and stop.
 
+## 0. Branch (do this before writing any file)
+New work goes on its own branch, cut from the **latest `develop`** (ADR-0006,
+`documentation/development/standards/git.md`). Branch name: `feature/<capability>` for Lane A; `change/<capability>-<change>` for Lane B.
+- If you are already on that branch, continue.
+- If it exists, `git switch` to it.
+- Otherwise run `git status` (it must be clean; if not, stop and ask the developer),
+  `git fetch origin`, `git switch develop`, `git pull --ff-only origin develop`, then
+  `git switch -c <branch>`.
+- Never write this work on `develop` or `main`. Report the branch name at the end.
+
 ## 1. Read first
 - `CLAUDE.md` (non-negotiable rules, decisions, pipeline, layout)
 - `documentation/development/AI-DEVELOPMENT-WORKFLOW.md` (sections 3, 4, 5, 8)

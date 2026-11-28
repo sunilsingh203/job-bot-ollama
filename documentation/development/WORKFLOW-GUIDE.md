@@ -36,6 +36,7 @@ Indeed/Ollama behaviour, Claude will tell you to move it up to Lane B. You decid
 
 | # | You type | What happens | File created |
 |---|---|---|---|
+| 0 | *(automatic)* | Claude creates `feature/review-dashboard` from the latest `develop` | the branch |
 | 1 | `/define-feature review-dashboard` | Claude reads the docs and code, **asks you questions**, then writes the spec with numbered acceptance criteria (AC-1, AC-2…) | `features/review-dashboard/specification.md` |
 | 2 | `/plan-feature review-dashboard` | Claude writes the plan: DB changes, modules, tests per AC, steps, risks | `implementation-plan.md` |
 | 3 | *(you)* read both, edit them or ask Claude to change them, then commit | | |
@@ -136,8 +137,11 @@ You can add or delete entries yourself.
 jobbot eval -v                              # matcher accuracy on sample job descriptions
 ```
 
-Git: one branch per piece of work (`feature/review-dashboard`, `fix/<change>`). Claude commits
-only when you ask. More detail is in [standards/git.md](standards/git.md).
+Git: **every new piece of work starts on its own branch, cut from the latest `develop`.** Claude
+creates it at `/define-feature` (or `/plan-small-change`) before writing anything:
+`git switch develop && git pull --ff-only && git switch -c feature/review-dashboard`.
+Spec, plan, code and review all go on that branch, and then into `develop` by one PR. `main`
+only gets `develop` when you call it stable. Claude commits and pushes only when you ask. More detail is in [standards/git.md](standards/git.md).
 
 ## Where we are now
 

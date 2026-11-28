@@ -7,6 +7,13 @@ argument-hint: <capability> | <capability>/changes/<change>
 
 Folder: `documentation/development/features/$ARGUMENTS/`. If `$ARGUMENTS` is empty, ask and stop.
 
+## 0. Branch check
+Run `git branch --show-current`. You must be on this work's branch (`feature/<capability>` or `change/<capability>-<change>`), the one created
+at `/define-feature` from `develop`. If you are on `develop` or `main`, or on another work's branch,
+stop and tell the developer. Don't commit feature work to `develop` or `main`. If `develop` has
+moved ahead (`git log --oneline HEAD..origin/develop` after `git fetch`), say so and offer to
+merge it in first.
+
 ## 1. Approval gate (standard governance) — do this first
 1. Check that `documentation/development/features/$ARGUMENTS/plan-approval.md` exists.
    - If it is **missing**: stop. Tell the developer that Lanes A/B need an approval: they can

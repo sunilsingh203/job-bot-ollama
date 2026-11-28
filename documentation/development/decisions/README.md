@@ -15,3 +15,4 @@ accepted ADR; supersede it with a new one.
 | [ADR-0003](ADR-0003-sql-migration-files.md) | Explicit SQL migration files applied by `PRAGMA user_version` | Accepted | 2026-11-26 |
 | [ADR-0004](ADR-0004-human-approval-never-auto-submit.md) | Human approval for every application; never auto-submit | Accepted | 2026-11-26 |
 | [ADR-0005](ADR-0005-chat-approvals-recorded-by-ai.md) | Plan approvals may be given in chat and recorded by the AI | Accepted | 2026-11-27 |
+| [ADR-0006](ADR-0006-develop-and-feature-branches.md) | `develop` branch; one feature branch per piece of work, cut from the latest `develop` | Accepted | 2026-11-28 |

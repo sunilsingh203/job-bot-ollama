@@ -15,6 +15,8 @@ Trivial edits asked for directly in chat are Lane D and don't need a folder.
 
 ## How to start one
 
+0. Branch `fix/<change>` from the latest `develop` (`/plan-small-change` does this for you;
+   see `../standards/git.md`).
 1. Create a folder `documentation/development/changes/<change>/`. Name it
    `YYYY-MM-DD-short-slug`, e.g. `2026-11-26-salary-per-month`.
 2. Write `request.md` (copy `../templates/request.md`): what, why, and how you'll know it works.

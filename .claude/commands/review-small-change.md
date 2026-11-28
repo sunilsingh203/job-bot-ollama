@@ -7,6 +7,10 @@ argument-hint: <change>
 
 Folder: `documentation/development/changes/$ARGUMENTS/`. If `$ARGUMENTS` is empty, ask and stop.
 
+## 0. Branch check
+Work on this feature's or change's own branch (cut from `develop`; see
+`documentation/development/standards/git.md`). If you are on `develop` or `main`, stop and ask.
+
 ## 1. Read first
 - `request.md` (especially "Done when"), `implementation-plan.md`
 - `CLAUDE.md`, `.claude/rules/*.md`

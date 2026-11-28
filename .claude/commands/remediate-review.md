@@ -7,6 +7,10 @@ argument-hint: <capability> | <capability>/changes/<change>
 
 Folder: `documentation/development/features/$ARGUMENTS/`. If `$ARGUMENTS` is empty, ask and stop.
 
+## 0. Branch check
+Work on this feature's or change's own branch (cut from `develop`; see
+`documentation/development/standards/git.md`). If you are on `develop` or `main`, stop and ask.
+
 ## 1. Read first
 - `review.md` (the findings), `specification.md` / `change-definition.md`,
   `implementation-plan.md`, `plan-approval.md` (read only)

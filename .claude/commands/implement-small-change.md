@@ -7,6 +7,13 @@ argument-hint: <change>
 
 Folder: `documentation/development/changes/$ARGUMENTS/`. If `$ARGUMENTS` is empty, ask and stop.
 
+## 0. Branch check
+Run `git branch --show-current`. You must be on this work's branch (`fix/$ARGUMENTS`), the one created
+at `/plan-small-change` from `develop`. If you are on `develop` or `main`, or on another work's branch,
+stop and tell the developer. Don't commit feature work to `develop` or `main`. If `develop` has
+moved ahead (`git log --oneline HEAD..origin/develop` after `git fetch`), say so and offer to
+merge it in first.
+
 ## 1. Go-ahead check
 - `request.md` and `implementation-plan.md` must exist. If the plan is missing, suggest
   `/plan-small-change $ARGUMENTS` and stop.
